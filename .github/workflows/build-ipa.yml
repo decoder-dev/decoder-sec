@@ -172,10 +172,12 @@ jobs:
           body: |
             ## decoder sec. `${{ steps.meta.outputs.version }}`
 
-            Two unsigned IPAs in this release:
+            Two unsigned IPAs in this release (ad-hoc signed for install tools):
 
-            1. **`DecoderSec-…-lite-unsigned.ipa`** — UI only (no Packet Tunnel). Resign **once** with any profile for `com.decodersec.app`. Opens, imports configs, no VPN.
-            2. **`DecoderSec-…-unsigned.ipa`** — full VPN. Resign with Network Extension packet-tunnel for app + `com.decodersec.app.PacketTunnel` (one command: `Scripts/resign_ipa.sh`). No App Group.
+            1. **`DecoderSec-…-lite-unsigned.ipa`** — UI only (no Packet Tunnel). Resign once for `com.decodersec.app`.
+            2. **`DecoderSec-…-unsigned.ipa`** — full VPN. Resign with Network Extension for app + PacketTunnel (`Scripts/resign_ipa.sh`).
+
+            EverywhereCore is statically linked into the tunnel — it is **not** embedded as a Frameworks binary (that broke install on beta.5).
 
             ```bash
             ./Scripts/resign_ipa.sh --ipa DecoderSec-…-unsigned.ipa \

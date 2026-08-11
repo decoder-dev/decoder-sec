@@ -9,6 +9,13 @@ All notable changes to **decoder sec.** are documented here.
 - `ru` / `en` localization
 - Signed TestFlight builds
 
+## [0.1.0-beta.6] — 2026-08-11
+
+### Fixed
+- **Install failure:** EverywhereCore is a static `.a` — embedding it as `Frameworks/*.framework` made iOS reject the IPA. Removed from the bundle (Evcore is already linked into `DecoderSecTunnel`)
+- Ad-hoc `codesign` on app + appex so Sideloadly / device install tools accept the package
+- CI validates: no static-lib framework binary, `Payload/*.app` structure, signature present
+
 ## [0.1.0-beta.5] — 2026-08-11
 
 ### Fixed

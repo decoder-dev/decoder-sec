@@ -51,7 +51,11 @@ git tag -a v0.1.0-beta.5 -m "decoder sec. v0.1.0-beta.5"
 git push origin v0.1.0-beta.5
 ```
 
-If an older IPA “cannot unpack” in Sideloadly / 3uTools: use **beta.5+** (packaged with `ditto --norsrc` and a real EverywhereCore binary).
+If an older IPA cannot unpack or install: use **beta.6+**.
+
+- beta.4 and earlier: packaging / unpack issues  
+- beta.5: shipped a static EverywhereCore `.a` as a framework → iOS refuses install  
+- beta.6: removes that framework embed + ad-hoc codesign
 ## Manual prerelease
 
 Actions → **Build IPA** → Run workflow with `publish_prerelease: true`.

@@ -271,6 +271,18 @@ unzip -q "$IPA" -d "$WORK/unpacked"
 APP_CANDIDATES=("$WORK"/unpacked/Payload/*.app)
 [[ -d "${APP_CANDIDATES[0]}" ]] || die "no .app found in IPA Payload"
 APP_PATH="${APP_CANDIDATES[0]}"
+
+# Static EverywhereCore .a embedded as a framework breaks device install.
+if [[ -f "$APP_PATH/Frameworks/EverywhereCore.framework/EverywhereCore" ]]; then
+  if file "$APP_PATH/Frameworks/EverywhereCore.framework/EverywhereCore" | grep -qi 'ar archive'; then
+    echo "==> removing non-installable static EverywhereCore.framework"
+    rm -rf "$APP_PATH/Frameworks/EverywhereCore.framework"
+  fi
+fi
+if [[ -d "$APP_PATH/Frameworks" ]] && [[ -z "$(ls -A "$APP_PATH/Frameworks" 2>/dev/null || true)" ]]; then
+  rmdir "$APP_PATH/Frameworks" || true
+fi
+
 APP_INFO="$APP_PATH/Info.plist"
 APP_BUNDLE_ID="$(plist_print "$APP_INFO" "CFBundleIdentifier")"
 [[ -n "$APP_BUNDLE_ID" ]] || die "could not read app bundle identifier"

@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
-# Archive DecoderSec and produce unsigned .ipa file(s) for GitHub Actions / local CI.
+# Archive DecoderSec and produce installable .ipa file(s) for GitHub Actions / local CI.
 #
 # Modes:
-#   SIGNING=unsigned   — archive with CODE_SIGNING_ALLOWED=NO, pack Payload → .ipa
+#   SIGNING=unsigned   — archive unsigned, then ad-hoc codesign + zip Payload → .ipa
 #   SIGNING=manual     — use cert/profile already installed in the keychain
 #   BOTH=1 (default)   — emit full VPN IPA + Lite (no PacketTunnel) from one archive
 #   LITE=1             — Lite only (UI / config browsing)
 #   LITE=0 BOTH=0      — full VPN IPA only
+#
+# Why we strip EverywhereCore.framework from the IPA:
+#   Upstream EverywhereCore is a *static* .a wrapped as a .framework. Xcode links
+#   Evcore* into DecoderSecTunnel (and the app) at build time. Embedding that .a
+#   as Frameworks/EverywhereCore.framework/EverywhereCore makes iOS refuse install
+#   ("invalid framework binary"). The tiny Xcode "codeless stub" is also useless
+#   at runtime when everything is already statically linked. So we delete it.
 #
 # Env:
 #   CONFIGURATION   Debug|Release (default Release)
@@ -29,9 +36,8 @@ EXPORT_OPTIONS="${EXPORT_OPTIONS:-$ROOT/Config/ExportOptions-ad-hoc.plist}"
 LITE="${LITE:-0}"
 BOTH="${BOTH:-1}"
 
-# Unsigned archives often embed a ~33KB Xcode "codeless" stub instead of the
-# real EverywhereCore binary. Reject anything under this floor.
-MIN_CORE_BYTES="${MIN_CORE_BYTES:-1000000}"
+APP_ENTITLEMENTS="$ROOT/DecoderSec/DecoderSec.entitlements"
+TUNNEL_ENTITLEMENTS="$ROOT/DecoderSecTunnel/DecoderSecTunnel.entitlements"
 
 mkdir -p "$(dirname "$ARCHIVE_PATH")" "$IPA_DIR" "$DERIVED_DATA"
 rm -f "$IPA_DIR"/*.ipa
@@ -97,68 +103,140 @@ if [[ -z "$APP_PATH" ]]; then
   exit 1
 fi
 
-find_real_everywhere_core() {
-  # Prefer the SPM binary artifact that Xcode downloaded for this build.
-  local candidates=()
-  while IFS= read -r -d '' f; do
-    candidates+=("$f")
-  done < <(find "$DERIVED_DATA/SourcePackages" \
-    "$ROOT/DerivedData/SourcePackages" \
-    "$HOME/Library/Developer/Xcode/DerivedData" \
-    -type d -path '*/EverywhereCore.xcframework/ios-arm64/EverywhereCore.framework' \
-    -print0 2>/dev/null || true)
-
-  local best="" best_size=0 size
-  for f in "${candidates[@]+"${candidates[@]}"}"; do
-    [[ -f "$f/EverywhereCore" ]] || continue
-    size=$(wc -c < "$f/EverywhereCore" | tr -d ' ')
-    if (( size > best_size )); then
-      best_size=$size
-      best=$f
-    fi
-  done
-  printf '%s' "$best"
+is_macho_dylib() {
+  local bin="$1"
+  [[ -f "$bin" ]] || return 1
+  local info
+  info="$(file -b "$bin" 2>/dev/null || true)"
+  # Reject static .a wrapped as "framework" binary — iOS will not install it.
+  if grep -qi 'ar archive' <<<"$info"; then
+    return 1
+  fi
+  grep -qiE 'Mach-O|dynamically linked shared library|dylib' <<<"$info"
 }
 
 repair_app_bundle() {
   local app="$1"
-  local core_src core_dst size
 
   # Drop Xcode source icon bundle — runtime uses Assets.car / PNG icons.
-  # Some Windows unpackers choke on nested .icon packages.
   rm -rf "$app/AppIcon.icon"
 
-  core_dst="$app/Frameworks/EverywhereCore.framework"
-  mkdir -p "$app/Frameworks"
-  core_src="$(find_real_everywhere_core)"
-  if [[ -z "$core_src" ]]; then
-    echo "error: could not locate EverywhereCore.xcframework ios-arm64 slice under DerivedData" >&2
-    exit 1
+  # EverywhereCore is a static library. Embedding it (or Xcode's stub) as a
+  # Frameworks/*.framework binary breaks or confuses installers. Evcore is
+  # already linked into DecoderSecTunnel; remove the embed.
+  if [[ -d "$app/Frameworks/EverywhereCore.framework" ]]; then
+    echo "→ removing static/stub EverywhereCore.framework (linked into binaries at build time)"
+    rm -rf "$app/Frameworks/EverywhereCore.framework"
   fi
-  size=$(wc -c < "$core_src/EverywhereCore" | tr -d ' ')
-  echo "→ embedding EverywhereCore from $core_src ($size bytes)"
-  if (( size < MIN_CORE_BYTES )); then
-    echo "error: source EverywhereCore is only $size bytes (stub?)" >&2
-    exit 1
+  # Clean empty Frameworks dir
+  if [[ -d "$app/Frameworks" ]] && [[ -z "$(ls -A "$app/Frameworks" 2>/dev/null || true)" ]]; then
+    rmdir "$app/Frameworks" || true
   fi
-  rm -rf "$core_dst"
-  ditto "$core_src" "$core_dst"
-  # Strip extended attributes that break Sideloadly / Windows unzip.
+
+  # Fix any remaining framework Info.plist MinimumOSVersion=100.0 (gomobile artifact)
+  while IFS= read -r -d '' plist; do
+    if command -v plutil >/dev/null 2>&1; then
+      local min
+      min="$(plutil -extract MinimumOSVersion raw "$plist" 2>/dev/null || true)"
+      if [[ "$min" == "100.0" || "$min" == "100" ]]; then
+        plutil -replace MinimumOSVersion -string "15.0" "$plist"
+        echo "→ fixed MinimumOSVersion in $plist"
+      fi
+    fi
+  done < <(find "$app" -name 'Info.plist' -print0)
+
   if command -v xattr >/dev/null 2>&1; then
     xattr -cr "$app" 2>/dev/null || true
   fi
-  size=$(wc -c < "$core_dst/EverywhereCore" | tr -d ' ')
-  if (( size < MIN_CORE_BYTES )); then
-    echo "error: embedded EverywhereCore is only $size bytes after copy" >&2
+}
+
+adhoc_sign_bundle() {
+  local app="$1"
+  if ! command -v codesign >/dev/null 2>&1; then
+    echo "error: codesign missing — cannot produce installable IPA on this host" >&2
     exit 1
   fi
-  echo "✓ EverywhereCore embedded ($size bytes)"
+
+  echo "→ ad-hoc codesign (required for Sideloadly / device install)"
+
+  # Nested Mach-O first: dylibs, then frameworks, then appex, then app.
+  while IFS= read -r -d '' bin; do
+    codesign --force --sign - --timestamp=none "$bin" 2>/dev/null || true
+  done < <(find "$app" -type f \( -name '*.dylib' -o -name '*.so' \) -print0 2>/dev/null || true)
+
+  while IFS= read -r -d '' fw; do
+    codesign --force --sign - --timestamp=none "$fw"
+  done < <(find "$app/Frameworks" -maxdepth 1 -type d -name '*.framework' -print0 2>/dev/null || true)
+
+  while IFS= read -r -d '' appex; do
+    if [[ -f "$TUNNEL_ENTITLEMENTS" ]]; then
+      codesign --force --sign - --timestamp=none --entitlements "$TUNNEL_ENTITLEMENTS" "$appex"
+    else
+      codesign --force --sign - --timestamp=none "$appex"
+    fi
+  done < <(find "$app/PlugIns" -maxdepth 1 -type d -name '*.appex' -print0 2>/dev/null || true)
+
+  if [[ -f "$APP_ENTITLEMENTS" ]]; then
+    codesign --force --sign - --timestamp=none --entitlements "$APP_ENTITLEMENTS" "$app"
+  else
+    codesign --force --sign - --timestamp=none "$app"
+  fi
+
+  if [[ ! -d "$app/_CodeSignature" ]]; then
+    echo "error: ad-hoc codesign did not produce _CodeSignature" >&2
+    exit 1
+  fi
+  # --no-strict: ad-hoc + NE entitlements without a profile still verify structurally.
+  if ! codesign --verify --no-strict "$app" >/dev/null 2>&1; then
+    echo "warning: codesign --verify reported issues (continuing; Sideloadly will re-sign)" >&2
+    codesign -dv "$app" 2>&1 | tail -8 || true
+  fi
+  echo "✓ ad-hoc signature present"
+}
+
+validate_installable_app() {
+  local app="$1"
+  local lite="$2"
+
+  [[ -f "$app/Info.plist" ]] || { echo "error: missing Info.plist"; return 1; }
+  [[ -x "$app/DecoderSec" || -f "$app/DecoderSec" ]] || { echo "error: missing DecoderSec binary"; return 1; }
+
+  # Must not ship a static .a as a framework binary.
+  if [[ -f "$app/Frameworks/EverywhereCore.framework/EverywhereCore" ]]; then
+    if ! is_macho_dylib "$app/Frameworks/EverywhereCore.framework/EverywhereCore"; then
+      echo "error: EverywhereCore.framework binary is not a dylib (static .a breaks install)" >&2
+      file "$app/Frameworks/EverywhereCore.framework/EverywhereCore" >&2 || true
+      return 1
+    fi
+  fi
+
+  if [[ "$lite" != "1" ]]; then
+    [[ -d "$app/PlugIns/DecoderSecTunnel.appex" ]] || {
+      echo "error: full IPA missing DecoderSecTunnel.appex" >&2
+      return 1
+    }
+    [[ -f "$app/PlugIns/DecoderSecTunnel.appex/DecoderSecTunnel" ]] || {
+      echo "error: missing tunnel binary" >&2
+      return 1
+    }
+  else
+    if [[ -d "$app/PlugIns" ]]; then
+      echo "error: lite IPA still has PlugIns/" >&2
+      return 1
+    fi
+  fi
+
+  # Ad-hoc signature must exist for install tools.
+  if [[ ! -d "$app/_CodeSignature" ]]; then
+    echo "error: app is not codesigned (ad-hoc required for install)" >&2
+    return 1
+  fi
 }
 
 pack_ipa() {
   local lite="$1"
   local name="$2"
-  local stage app_name app_copy
+  local stage app_name app_copy out check
   stage="$(mktemp -d)"
   mkdir -p "$stage/Payload"
   ditto "$APP_PATH" "$stage/Payload/$(basename "$APP_PATH")"
@@ -171,46 +249,23 @@ pack_ipa() {
     rm -rf "$app_copy/PlugIns"
   fi
 
-  # Sideload-friendly IPA: strip macOS extras (-X). Always keep Payload/ as zip root.
-  local out="$IPA_DIR/$name"
+  adhoc_sign_bundle "$app_copy"
+  validate_installable_app "$app_copy" "$lite"
+
+  out="$IPA_DIR/$name"
   rm -f "$out"
-  if [[ ! -f "$app_copy/Info.plist" ]]; then
-    echo "error: staged app missing Info.plist before zip" >&2
-    rm -rf "$stage"
-    exit 1
-  fi
   (
     cd "$stage"
-    # -X strips uid/gid/xattr; -9 deflates large binaries. Do NOT use ditto here:
-    # ditto -ck without keepParent can omit the Payload/ root and break Sideloadly.
     zip -r -X -9 "$out" Payload
   )
 
-  # Validate: must unpack cleanly and contain Payload/*.app/Info.plist
-  local check
   check="$(mktemp -d)"
   unzip -q "$out" -d "$check"
-  if [[ ! -f "$check/Payload/$app_name/Info.plist" ]]; then
-    echo "error: packed IPA missing Payload/$app_name/Info.plist" >&2
-    echo "archive top-level:" >&2
-    unzip -l "$out" | head -30 >&2
-    rm -rf "$stage" "$check"
-    exit 1
-  fi
-  local core_size=0
-  if [[ -f "$check/Payload/$app_name/Frameworks/EverywhereCore.framework/EverywhereCore" ]]; then
-    core_size=$(wc -c < "$check/Payload/$app_name/Frameworks/EverywhereCore.framework/EverywhereCore" | tr -d ' ')
-  fi
-  if (( core_size < MIN_CORE_BYTES )); then
-    echo "error: IPA EverywhereCore is $core_size bytes — refusing to ship a stub" >&2
-    rm -rf "$stage" "$check"
-    exit 1
-  fi
-  # zip integrity
+  validate_installable_app "$check/Payload/$app_name" "$lite"
   unzip -t "$out" >/dev/null
   rm -rf "$stage" "$check"
 
-  echo "✓ unsigned IPA: $out ($(du -h "$out" | awk '{print $1}'), EverywhereCore=${core_size} bytes)"
+  echo "✓ IPA: $out ($(du -h "$out" | awk '{print $1}'))"
 }
 
 if [[ "$IS_BOTH" == "1" ]]; then

@@ -60,6 +60,12 @@ an Xcode UI edit reasserts them.
   Adding the product to a Copy Files phase by `productRef` double-
   resolves and fails with `No such file or directory` on the bare
   product name.
+- **Installable IPA note:** EverywhereCore’s ios slice is a *static*
+  library (`.a` inside a `.framework` wrapper). Xcode links `Evcore*` into
+  `DecoderSecTunnel` at build time. `Scripts/ci_export_ipa.sh` **removes**
+  `Frameworks/EverywhereCore.framework` from the packaged app and applies
+  an ad-hoc signature — shipping the static `.a` as a framework binary
+  makes iOS refuse installation.
 - `ThirdParty/zashboard` registered as a folder reference (blue folder,
   `lastKnownFileType = folder`) on the app target's Resources phase —
   zashboard's `index.html` references its bundled assets via relative
