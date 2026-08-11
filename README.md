@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/decoder-dev/decoder-sec/actions/workflows/build-ipa.yml"><img src="https://github.com/decoder-dev/decoder-sec/actions/workflows/build-ipa.yml/badge.svg" alt="Build IPA" /></a>
+  <a href="https://github.com/decoder-dev/decoder-sec/releases"><img src="https://img.shields.io/github/v/release/decoder-dev/decoder-sec?include_prereleases" alt="Release" /></a>
 </p>
 
 ## About
