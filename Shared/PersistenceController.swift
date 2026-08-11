@@ -19,25 +19,28 @@ final class PersistenceController {
     var viewContext: NSManagedObjectContext { container.viewContext }
 
     init(inMemory: Bool = false) {
-        container = NSPersistentContainer(name: "Model", managedObjectModel: Self.makeManagedObjectModel())
-
+        let container = NSPersistentContainer(name: "Model", managedObjectModel: Self.makeManagedObjectModel())
         container.persistentStoreDescriptions = [Self.storeDescription(inMemory: inMemory)]
 
         let primaryError = Self.loadStore(into: container)
-        if let primaryError, !inMemory {
-            NSLog("[Persistence] store load failed, falling back to memory: \(primaryError.localizedDescription)")
-            container.persistentStoreCoordinator.persistentStores.forEach {
-                try? container.persistentStoreCoordinator.remove($0)
+        var effectiveError = primaryError
+
+        if primaryError != nil, !inMemory {
+            NSLog("[Persistence] store load failed, falling back to memory: \(primaryError!.localizedDescription)")
+            let coordinator = container.persistentStoreCoordinator
+            for store in coordinator.persistentStores {
+                try? coordinator.remove(store)
             }
             container.persistentStoreDescriptions = [Self.storeDescription(inMemory: true)]
+            effectiveError = Self.loadStore(into: container)
+            if let effectiveError {
+                NSLog("[Persistence] in-memory fallback failed: \(effectiveError.localizedDescription)")
+            }
         }
 
-        let fallbackError = primaryError == nil || inMemory ? primaryError : Self.loadStore(into: container)
-        if let fallbackError {
-            NSLog("[Persistence] in-memory fallback failed: \(fallbackError.localizedDescription)")
-        }
-        storeLoadError = primaryError ?? fallbackError
-        isStoreLoaded = fallbackError == nil
+        self.container = container
+        self.storeLoadError = primaryError ?? effectiveError
+        self.isStoreLoaded = effectiveError == nil
 
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
