@@ -25,7 +25,7 @@ struct ContentView: View {
                         .tabItem { Label(Brand.shortName, systemImage: "shield.lefthalf.filled") }
 
                     SettingsView()
-                        .tabItem { Label("Settings", systemImage: "slider.horizontal.3") }
+                        .tabItem { Label(String(localized: "Settings"), systemImage: "slider.horizontal.3") }
                 }
             }
 
@@ -95,7 +95,7 @@ struct ContentView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Storage unavailable")
+                Text(String(localized: "Storage unavailable"))
                     .font(Brand.Font.mono(11, weight: .semibold))
                     .foregroundStyle(Brand.Color.primaryText)
                 Text(message)

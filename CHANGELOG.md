@@ -6,8 +6,19 @@ All notable changes to **decoder sec.** are documented here.
 
 ### Planned
 - Subscription UX (node list / one-tap connect)
-- `ru` / `en` localization
 - Signed TestFlight builds
+
+## [0.1.0-beta.8] — 2026-08-11
+
+### Added
+- Русская локализация (`ru`) для UI
+- Расшифровка `happ://crypt` … `happ://crypt5` и импорт подписки из расшифрованного URL
+- Заголовки Happ/Remnawave HWID (`X-HWID`, `User-Agent`, device meta) при загрузке подписки
+- Импорт JSON-массива полных Xray-конфигов (несколько профилей из одной подписки)
+
+### Notes
+- Ссылка `happ://crypt5/…` расшифровывается локально → `https://…` URL подписки
+- Без `X-HWID` многие панели отдают заглушку «App not supported» — теперь заголовок отправляется автоматически
 
 ## [0.1.0-beta.7] — 2026-08-11
 

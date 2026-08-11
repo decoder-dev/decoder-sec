@@ -43,7 +43,7 @@ struct HomeView: View {
             .alert("Tunnel is running", isPresented: $coreSwitchBlocked) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("Stop the tunnel before switching cores.")
+                Text(String(localized: "Stop the tunnel before switching cores."))
             }
             .alert(
                 "Connection failed",
@@ -172,7 +172,7 @@ struct HomeView: View {
             } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Configuration")
+                        Text(String(localized: "Configuration"))
                             .font(Brand.Font.mono(11))
                             .foregroundStyle(Brand.Color.secondaryText)
                         Text(store.active?.name ?? "None")
@@ -201,7 +201,7 @@ struct HomeView: View {
             }
 
             Toggle(isOn: $appState.useZashboardEnabled) {
-                Text("Dashboard")
+                Text(String(localized: "Dashboard"))
                     .font(Brand.Font.body(15))
                     .foregroundStyle(Brand.Color.primaryText)
             }

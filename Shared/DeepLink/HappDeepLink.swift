@@ -25,8 +25,8 @@ enum HappDeepLinkAction: Equatable {
     case disconnect
     case toggle
     case status
-    /// `happ://cryptN/...` — encrypted; private keys are not public.
-    case unsupportedCrypto(version: String)
+    /// `happ://cryptN/...` — encrypted Happ subscription / config payload.
+    case encrypted(version: String, payloadURL: URL)
 }
 
 enum RoutingPayload: Equatable {
@@ -57,7 +57,7 @@ enum HappDeepLink {
 
         // happ://crypt4/<payload>  (host = crypt4)
         if host.hasPrefix("crypt") {
-            return .unsupportedCrypto(version: host)
+            return .encrypted(version: host, payloadURL: url)
         }
 
         switch host {

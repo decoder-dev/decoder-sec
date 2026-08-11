@@ -57,6 +57,7 @@
 			membershipExceptions = (
 				Configuration.swift,
 				PersistenceController.swift,
+				DeepLink/DeviceIdentity.swift,
 				DeepLink/HappDeepLink.swift,
 				DeepLink/RoutingProfileStore.swift,
 				DeepLink/ShareLinkToXray.swift,
@@ -244,6 +245,7 @@
 				en,
 				Base,
 				"zh-Hans",
+				ru,
 			);
 			mainGroup = CB0BA4072FA6272C00E37B2C;
 			minimizedProjectReferenceProxies = 1;

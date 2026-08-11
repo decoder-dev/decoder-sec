@@ -27,7 +27,7 @@ final class DeepLinkCenter: ObservableObject {
 
     func handleAsync(_ url: URL) async {
         guard let action = HappDeepLink.parse(url) else {
-            presentError("Unsupported deep link.")
+            presentError(String(localized: "Unsupported deep link."))
             return
         }
         await perform(action)
@@ -49,7 +49,7 @@ final class DeepLinkCenter: ObservableObject {
 
             case .routingOff:
                 routing.disable()
-                present("Routing disabled.")
+                present(String(localized: "Routing disabled."))
 
             case .connect:
                 store.selectedCore = .xray
@@ -67,10 +67,25 @@ final class DeepLinkCenter: ObservableObject {
                 }
 
             case .status:
-                present(tunnel.status.isActive ? "VPN is connected." : "VPN is disconnected.")
+                present(tunnel.status.isActive
+                        ? String(localized: "VPN is connected.")
+                        : String(localized: "VPN is disconnected."))
 
-            case .unsupportedCrypto(let version):
-                presentError("Encrypted \(version) links need Happ’s private keys and are not supported in this fork.")
+            case .encrypted(_, let payloadURL):
+                let plain = try HappCryptDecryptor.decrypt(url: payloadURL)
+                let trimmed = plain.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let sub = URL(string: trimmed),
+                   ["http", "https"].contains((sub.scheme ?? "").lowercased()) {
+                    try await importSubscription(sub)
+                } else if HappDeepLink.shareSchemes.contains(where: { trimmed.lowercased().hasPrefix($0 + "://") })
+                            || trimmed.contains("://") {
+                    try importShare(trimmed)
+                } else if let asURL = URL(string: trimmed), asURL.scheme != nil {
+                    try await importSubscription(asURL)
+                } else {
+                    // Multi-line subscription body
+                    try importShare(trimmed)
+                }
             }
         } catch {
             presentError(error.localizedDescription)
@@ -95,17 +110,37 @@ final class DeepLinkCenter: ObservableObject {
         ) else {
             throw NSError(domain: "DeepLinkCenter", code: -10, userInfo: [
                 NSLocalizedDescriptionKey: store.storeError
-                    ?? "Local storage is unavailable — can't save the imported subscription."
+                    ?? String(localized: "Local storage is unavailable — can't save the imported subscription.")
             ])
         }
         store.setActive(cfg)
+
+        var extraCount = 0
+        for extra in result.additionalConfigs {
+            var extraContent = extra.content
+            if core == .xray, routing.routingEnabled, let profile = routing.activeProfile {
+                extraContent = (try? HappRoutingApplier.apply(profile: profile, toXrayJSON: extraContent)) ?? extraContent
+            }
+            if store.create(
+                name: extra.name,
+                type: core,
+                content: extraContent,
+                sourceURL: result.sourceURL
+            ) != nil {
+                extraCount += 1
+            }
+        }
 
         if let embedded = result.embeddedRoutingDeepLink,
            let rURL = URL(string: embedded),
            let action = HappDeepLink.parse(rURL) {
             await perform(action)
         }
-        present("Subscription “\(cfg.name)” imported.")
+        if extraCount > 0 {
+            present(String(localized: "Subscription “\(cfg.name)” imported (+\(extraCount) more)."))
+        } else {
+            present(String(localized: "Subscription “\(cfg.name)” imported."))
+        }
     }
 
     private func importShare(_ raw: String) throws {
@@ -123,11 +158,11 @@ final class DeepLinkCenter: ObservableObject {
         guard let cfg = store.create(name: built.name, type: .xray, content: content) else {
             throw NSError(domain: "DeepLinkCenter", code: -10, userInfo: [
                 NSLocalizedDescriptionKey: store.storeError
-                    ?? "Local storage is unavailable — can't save the imported node."
+                    ?? String(localized: "Local storage is unavailable — can't save the imported subscription.")
             ])
         }
         store.setActive(cfg)
-        present("Node “\(cfg.name)” imported.")
+        present(String(localized: "Node “\(cfg.name)” imported."))
     }
 
     private func importRouting(_ payload: RoutingPayload, activate: Bool) async throws {
@@ -136,13 +171,13 @@ final class DeepLinkCenter: ObservableObject {
             let profile = try routing.upsert(fromJSONData: data, activate: activate)
             if activate { try applyRoutingToActiveXray(profile) }
             present(activate
-                    ? "Routing “\(profile.name)” activated."
-                    : "Routing “\(profile.name)” added.")
+                    ? String(localized: "Routing “\(profile.name)” activated.")
+                    : String(localized: "Routing “\(profile.name)” added."))
         case .remoteURL(let url):
             let (data, response) = try await URLSession.shared.data(from: url)
             if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
                 throw NSError(domain: "DeepLinkCenter", code: http.statusCode,
-                              userInfo: [NSLocalizedDescriptionKey: "Routing URL HTTP \(http.statusCode)."])
+                              userInfo: [NSLocalizedDescriptionKey: String(localized: "Routing URL HTTP \(http.statusCode).")])
             }
             // Body may be raw JSON or a happ://routing/... deeplink line.
             if let text = String(data: data, encoding: .utf8)?
@@ -155,7 +190,7 @@ final class DeepLinkCenter: ObservableObject {
             }
             let profile = try routing.upsert(fromJSONData: data, activate: activate, sourceURL: url.absoluteString)
             if activate { try applyRoutingToActiveXray(profile) }
-            present("Routing “\(profile.name)” loaded from URL.")
+            present(String(localized: "Routing “\(profile.name)” loaded from URL."))
         }
     }
 
