@@ -350,9 +350,17 @@ codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
 echo "==> package $OUTPUT"
 rm -f "$OUTPUT"
+if command -v xattr >/dev/null 2>&1; then
+  xattr -cr "$WORK/unpacked/Payload" 2>/dev/null || true
+fi
 (
   cd "$WORK/unpacked"
-  zip -qry "$OUTPUT" Payload
+  if command -v ditto >/dev/null 2>&1; then
+    ditto -ck --norsrc --noextattr --noacl Payload "$OUTPUT"
+  else
+    zip -r -X -9 "$OUTPUT" Payload
+  fi
 )
+unzip -t "$OUTPUT" >/dev/null
 
 echo "OK: resigned IPA: $OUTPUT"

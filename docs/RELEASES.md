@@ -47,10 +47,11 @@ Full VPN needs Network Extension (packet-tunnel) on the profile(s). No App Group
 Pushing a `v*` tag runs **Build IPA** and publishes a GitHub Release (prerelease if the tag contains `alpha` / `beta` / `rc` / `dev` / `pre`). Each release includes **both** full and lite unsigned IPAs.
 
 ```bash
-git tag -a v0.1.0-beta.4 -m "decoder sec. v0.1.0-beta.4"
-git push origin v0.1.0-beta.4
+git tag -a v0.1.0-beta.5 -m "decoder sec. v0.1.0-beta.5"
+git push origin v0.1.0-beta.5
 ```
 
+If an older IPA “cannot unpack” in Sideloadly / 3uTools: use **beta.5+** (packaged with `ditto --norsrc` and a real EverywhereCore binary).
 ## Manual prerelease
 
 Actions → **Build IPA** → Run workflow with `publish_prerelease: true`.

@@ -9,6 +9,14 @@ All notable changes to **decoder sec.** are documented here.
 - `ru` / `en` localization
 - Signed TestFlight builds
 
+## [0.1.0-beta.5] — 2026-08-11
+
+### Fixed
+- IPA packaging: build with `ditto -ck --norsrc` (Sideloadly / 3uTools can unpack)
+- Replace Xcode's ~33KB EverywhereCore **stub** with the real SPM ios-arm64 framework before packing
+- Strip `AppIcon.icon` source bundle from the IPA (runtime uses Assets.car)
+- CI refuses to publish if EverywhereCore is still a stub or the IPA fails `unzip -t`
+
 ## [0.1.0-beta.4] — 2026-08-11
 
 ### Fixed
