@@ -19,8 +19,8 @@ ruby Scripts/wire_project.rb
 if [[ "${1:-}" == "--build-app" ]]; then
   echo "→ xcodebuild simulator smoke test"
   xcodebuild \
-    -project Everywhere.xcodeproj \
-    -scheme Everywhere \
+    -project DecoderSec.xcodeproj \
+    -scheme DecoderSec \
     -sdk iphonesimulator \
     -destination 'generic/platform=iOS Simulator' \
     -configuration Debug \

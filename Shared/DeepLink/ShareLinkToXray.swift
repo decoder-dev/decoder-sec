@@ -1,6 +1,6 @@
 //
 //  ShareLinkToXray.swift
-//  Everywhere
+//  DecoderSec
 //
 //  Convert Happ/INCY-style share links into a minimal Xray JSON config.
 //

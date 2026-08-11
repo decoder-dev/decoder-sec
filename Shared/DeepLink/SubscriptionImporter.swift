@@ -1,6 +1,6 @@
 //
 //  SubscriptionImporter.swift
-//  Everywhere
+//  DecoderSec
 //
 //  Fetch Happ-style subscription bodies and turn them into Xray configs.
 //

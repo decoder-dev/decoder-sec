@@ -1,6 +1,6 @@
 //
 //  CoreNormalizer.swift
-//  Everywhere
+//  DecoderSec
 //
 //  Created by NodePassProject on 5/24/26.
 //
@@ -35,7 +35,7 @@ extension CoreNormalizer {
     static var tunnelHost6: String { "fd00::1" }
     static var tunnelPrefix6: String { "fd00::1/126" }
     static var tunnelMTU: Int { 1500 }
-    static var everywhereTag: String { "everywhere-tun" }
+    static var decoderTunTag: String { "decoder-tun" }
     static var tunStack: String { "gvisor" }
     static var clashAPIAddress: String { "127.0.0.1:9090" }
     

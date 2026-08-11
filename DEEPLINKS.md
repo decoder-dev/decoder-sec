@@ -45,5 +45,5 @@ Alias: every `happ://…` form also works as `everywhere://…`, `decodersec://�
 - `Shared/DeepLink/ShareLinkToXray.swift` — share-link → Xray outbound JSON
 - `Shared/DeepLink/SubscriptionImporter.swift` — HTTP subscription body
 - `Shared/DeepLink/RoutingProfileStore.swift` — profile storage + Xray merge
-- `Everywhere/DeepLink/DeepLinkCenter.swift` — UI orchestration
-- `Everywhere/Info.plist` — URL scheme registration
+- `DecoderSec/DeepLink/DeepLinkCenter.swift` — UI orchestration
+- `DecoderSec/Info.plist` — URL scheme registration

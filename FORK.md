@@ -1,48 +1,37 @@
-# Fork roadmap
+# decoder-sec — development notes
 
-This tree is a working fork of [NodePassProject/Everywhere](https://github.com/NodePassProject/Everywhere) (GPLv3).
+This repository is the **decoder sec.** product line: we keep the working client code, own the branding/UX, and evolve features for our purposes.
 
-## Current core pin
+Upstream lineage (GPLv3): [NodePassProject/Everywhere](https://github.com/NodePassProject/Everywhere) + [EverywhereCore](https://github.com/NodePassProject/EverywhereCore).
 
-| Component | Version |
-|-----------|---------|
-| EverywhereCore floor | `2026.08.09` |
-| Xray-core | `v1.260327.0` (`v26.3.27`) — latest stable on Go proxy |
-| sing-box | `v1.13.18` |
-| mihomo | `v1.19.29` |
+## Done
 
-Upstream EverywhereCore already auto-releases when Xray/sing-box/mihomo move. This fork raises the SwiftPM floor so resolves do not land on stale May builds, and adds GitHub Actions IPA packaging.
+- [x] Project rename → `DecoderSec` / `DecoderSecTunnel`
+- [x] Brand pack (logo, OLED + neon, bundle / app group)
+- [x] Happ-compatible deep links
+- [x] IPA via GitHub Actions
+- [x] EverywhereCore floor `2026.08.09` (Xray `v1.260327.0`)
 
-## Implementation ideas (priority)
+## Next (own roadmap)
 
-1. **CI IPA (done in this branch)** — `macos-15` archive → artifact; optional manual signing via secrets.
-2. **Core control** — optional fork of EverywhereCore + `EVERYWHERE_CORE_REPO` override when you need patches ahead of upstream.
-3. **Subscription UX** — Happ/INCY-style: paste URL / QR → node list → one-tap connect (keep raw JSON/YAML editor as power-user mode).
-4. **Share-link parsers** — `vless://`, `vmess://`, `trojan://`, `ss://`, `hy2://` → Xray/sing-box outbound (reuse docs formats from INCY as a compatibility reference).
-5. **Deep links** — **Happ-compatible `happ://`** (see [DEEPLINKS.md](./DEEPLINKS.md)): `add`, `routing/onadd`, share-links, connect/disconnect.
-6. **NE memory profile** — iOS Network Extension ~50 MB; add “lite” routing / geo trimming toggle.
-7. **Branding pack** — **done**: decoder sec. OLED black + neon green, logo icon, `com.decodersec.app` / App Group.
-8. **Xray-only slim build** (optional later) — drop mihomo/sing-box from EverywhereCore to shrink binary and attack surface.
-9. **Locales** — `ru` / `en` strings for mass-market UX.
-10. **TestFlight lane** — once signing secrets exist, add `method: app-store` export + upload.
+1. Subscription UX (node list, one-tap connect) on top of BYOC editor
+2. Optional EverywhereCore fork for Xray-only / patches
+3. Lite NE mode (~50 MB) + geo trimming
+4. `ru` / `en` localization
+5. TestFlight / signed distribution when certs exist
+6. Provider portal hooks (deep links already in place)
 
-## Build IPA locally (macOS)
+## Layout
 
-```bash
-./Scripts/ci_export_ipa.sh          # unsigned IPA in build/ipa/
-SIGNING=manual DEVELOPMENT_TEAM=XXXX ./Scripts/ci_export_ipa.sh
+```
+DecoderSec/           # app target
+DecoderSecTunnel/     # packet tunnel appex
+Shared/               # models, normalizers, deep links, brand identity
+Scripts/              # wire_project.rb, ci_export_ipa.sh
+ThirdParty/zashboard/ # dashboard UI bundle
 ```
 
-## GitHub Actions
+## Env overrides
 
-Workflow: `.github/workflows/build-ipa.yml`
-
-- Push / PR / tag / manual dispatch → upload `Everywhere-ipa-<sha>` artifact
-- Tag `v*` → attach IPA to GitHub Release
-- Optional secrets: `BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, `BUILD_PROVISION_PROFILE_BASE64`, `KEYCHAIN_PASSWORD`, `TEAM_ID`
-
-Network Extension installs on device require a provisioning profile with the Network Extension capability — unsigned IPAs must be re-signed (Sideloadly / AltStore / your cert).
-
-## License
-
-GPLv3 — modifications shipped as binaries must ship corresponding source.
+- `EVERYWHERE_CORE_REPO` — point at a forked EverywhereCore
+- `EVERYWHERE_CORE_MIN_VERSION` — raise SwiftPM floor

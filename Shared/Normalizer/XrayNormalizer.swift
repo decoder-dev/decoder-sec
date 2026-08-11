@@ -1,6 +1,6 @@
 //
 //  XrayNormalizer.swift
-//  Everywhere
+//  DecoderSec
 //
 //  Created by NodePassProject on 5/24/26.
 //
@@ -17,7 +17,7 @@ enum XrayNormalizer: JSONCoreNormalizer {
         if let first = inbounds.firstIndex(where: { isTunInbound($0, typeKey: "protocol") }) {
             var patched = inbounds[first]
             patched["protocol"] = "tun"
-            patched["tag"] = everywhereTag
+            patched["tag"] = decoderTunTag
             var settings = (patched["settings"] as? [String: Any]) ?? [:]
             settings["name"] = "utun"
             settings["MTU"] = tunnelMTU
@@ -26,7 +26,7 @@ enum XrayNormalizer: JSONCoreNormalizer {
             removeOtherTunInbounds(&inbounds, keep: first, typeKey: "protocol")
         } else {
             inbounds.append([
-                "tag": everywhereTag,
+                "tag": decoderTunTag,
                 "protocol": "tun",
                 "settings": [
                     "name": "utun",

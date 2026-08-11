@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # Wires the EverywhereCore SwiftPM package, the Runestone editor
 # packages, and the zashboard dashboard resource bundle into
-# Everywhere.xcodeproj (iOS). Idempotent — running it twice is safe.
+# DecoderSec.xcodeproj (iOS). Idempotent — running it twice is safe.
 #
 # EverywhereCore ships as a prebuilt xcframework on GitHub Releases;
 # SwiftPM downloads and verifies it. The app target embeds it; the
@@ -9,7 +9,7 @@
 
 require 'xcodeproj'
 
-PROJECT_PATH       = File.expand_path('../Everywhere.xcodeproj', __dir__)
+PROJECT_PATH       = File.expand_path('../DecoderSec.xcodeproj', __dir__)
 DASHBOARD_REL_PATH = 'ThirdParty/zashboard'
 DASHBOARD_NAME     = 'zashboard'
 DEPLOYMENT_TARGET  = '15.0'
@@ -31,8 +31,8 @@ TS_LANG_PRODUCTS = %w[TreeSitterJSONRunestone TreeSitterYAMLRunestone]
 
 project = Xcodeproj::Project.open(PROJECT_PATH)
 
-app_target = project.targets.find { |t| t.name == 'Everywhere' } or abort 'Everywhere target missing'
-ne_target  = project.targets.find { |t| t.name == 'EverywhereNE' } or abort 'EverywhereNE target missing'
+app_target = project.targets.find { |t| t.name == 'DecoderSec' } or abort 'DecoderSec target missing'
+ne_target  = project.targets.find { |t| t.name == 'DecoderSecTunnel' } or abort 'DecoderSecTunnel target missing'
 
 # --- Tear down any prior local-xcframework wiring -------------------------
 # Self-healing for repos previously wired against Frameworks/EverywhereCore.xcframework.

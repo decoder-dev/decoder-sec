@@ -1,6 +1,6 @@
 //
 //  BrandIdentity.swift
-//  Everywhere
+//  DecoderSec
 //
 //  Shared brand strings (app + Network Extension).
 //

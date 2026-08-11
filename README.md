@@ -1,152 +1,52 @@
-<div align="center">
+# decoder sec.
 
-<div>
-    <a href="https://apps.apple.com/app/id6766003090">
-        <img width="100" height="100" alt="Everywhere" src="https://storage.argsment.com/Everywhere-AppIcon-iOS.png" />
-    </a>
-</div>
+Premium iOS proxy client — **decoder-sec**.
 
-# Everywhere (fork)
+Built for our own product direction on top of the open Everywhere / Xray stack (GPLv3).
 
-> Fork notes, core pin, IPA CI and roadmap: see **[FORK.md](./FORK.md)**.
-> EverywhereCore floor: **2026.08.09** (Xray `v1.260327.0`).
+[![Build IPA](https://github.com/decoder-dev/decoder-sec/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/decoder-dev/decoder-sec/actions/workflows/build-ipa.yml)
 
-**One app. Three networking engines. Your rules.**
+## What it is
 
-Everywhere is a powerful proxy and tunneling app for iOS that puts you in
-charge of how your device talks to the internet. Bring your own
-configuration, pick the engine you trust, and flip a switch. That's it.
+- Native **Swift** app + Network Extension
+- Engines via [EverywhereCore](https://github.com/NodePassProject/EverywhereCore): **Xray**, **sing-box**, **mihomo**
+- Brand: OLED black + neon green (`decoder sec.`)
+- Happ-compatible deep links (`happ://add/…`, routing, share-links)
+- GitHub Actions → IPA artifacts
 
-<div>
-    <a href="https://apps.apple.com/app/id6766003090">
-        <img width="128" src="https://storage.argsment.com/Download%20on%20the%20App%20Store.png" />
-    </a>
-</div>
+## Identity
 
-</div>
+| | |
+|---|---|
+| Display name | `decoder sec.` |
+| Xcode project | `DecoderSec.xcodeproj` |
+| Targets | `DecoderSec` · `DecoderSecTunnel` |
+| Bundle ID | `com.decodersec.app` |
+| Packet Tunnel | `com.decodersec.app.PacketTunnel` |
+| App Group | `group.com.decodersec.app` |
 
----
+Details: [BRAND.md](./BRAND.md) · deep links: [DEEPLINKS.md](./DEEPLINKS.md) · roadmap: [FORK.md](./FORK.md)
 
-## Why Everywhere?
-
-Most networking apps lock you into a single backend and a single way of
-doing things. Everywhere doesn't. It bundles three of the most popular
-open-source proxy cores in one place, gives them a clean home, and lets
-you move between them whenever you like.
-
-## Supported Protocols
-
-| Protocol         | Xray-core    | sing-box     | mihomo       | Everywhere   |
-|------------------|--------------|--------------|--------------|--------------|
-| VLESS            | [✓](https://core-tutorial.argsment.com/xray/vless) | [✓](https://core-tutorial.argsment.com/singbox/vless) | [✓](https://core-tutorial.argsment.com/mihomo/vless) | ✓ |
-| VMess            | [✓](https://core-tutorial.argsment.com/xray/vmess) | [✓](https://core-tutorial.argsment.com/singbox/vmess) | [✓](https://core-tutorial.argsment.com/mihomo/vmess) | ✓ |
-| Trojan           | [✓](https://core-tutorial.argsment.com/xray/trojan) | [✓](https://core-tutorial.argsment.com/singbox/trojan) | [✓](https://core-tutorial.argsment.com/mihomo/trojan) | ✓ |
-| Shadowsocks      | [✓](https://core-tutorial.argsment.com/xray/shadowsocks) | [✓](https://core-tutorial.argsment.com/singbox/shadowsocks) | [✓](https://core-tutorial.argsment.com/mihomo/shadowsocks) | ✓ |
-| ShadowsocksR     | — | [✓](https://core-tutorial.argsment.com/singbox/ssr) | [✓](https://core-tutorial.argsment.com/mihomo/ssr) | ✓ |
-| Hysteria2        | [✓](https://core-tutorial.argsment.com/xray/hysteria2) | [✓](https://core-tutorial.argsment.com/singbox/hysteria2) | [✓](https://core-tutorial.argsment.com/mihomo/hysteria2) | ✓ |
-| WireGuard        | [✓](https://core-tutorial.argsment.com/xray/wireguard) | [✓](https://core-tutorial.argsment.com/singbox/wireguard) | [✓](https://core-tutorial.argsment.com/mihomo/wireguard) | ✓ |
-| Naive            | — | [✓](https://core-tutorial.argsment.com/singbox/naive) | — | — |
-| TUIC             | — | [✓](https://core-tutorial.argsment.com/singbox/tuic) (v5) | [✓](https://core-tutorial.argsment.com/mihomo/tuic) (v4 + v5) | ✓ (v4 + v5) |
-| AnyTLS           | — | [✓](https://core-tutorial.argsment.com/singbox/anytls) | [✓](https://core-tutorial.argsment.com/mihomo/anytls) | ✓ |
-| Sudoku           | — | — | [✓](https://core-tutorial.argsment.com/mihomo/sudoku) | ✓ |
-| Tor              | — | [✓](https://core-tutorial.argsment.com/singbox/tor) | — | ✓ |
-| SSH              | — | [✓](https://core-tutorial.argsment.com/singbox/ssh) | [✓](https://core-tutorial.argsment.com/mihomo/ssh) | ✓ |
-| SOCKS            | [✓](https://core-tutorial.argsment.com/xray/http-socks) | [✓](https://core-tutorial.argsment.com/singbox/http-socks) | [✓](https://core-tutorial.argsment.com/mihomo/http-socks) | ✓ |
-| HTTP             | [✓](https://core-tutorial.argsment.com/xray/http-socks) | [✓](https://core-tutorial.argsment.com/singbox/http-socks) | [✓](https://core-tutorial.argsment.com/mihomo/http-socks) | ✓ |
-| Tailscale        | — | [✓](https://core-tutorial.argsment.com/singbox/tailscale) | [✓](https://core-tutorial.argsment.com/mihomo/tailscale) | ✓ |
-
-## Supported Cores
-
-| Core      | Config    | Supported? |
-|-----------|-----------|------------|
-| Xray-core | JSON      | ✓          |
-| sing-box  | JSON      | ✓          |
-| mihomo    | YAML      | ✓          |
-
-## Features
-
-- **Maximum flexibility** - Switch cores whenever you want. Three
-  engines live side by side in the same app, one tap apart.
-- **Universal experience** - Same UI, same editor, same dashboard
-  wiring no matter which core you picked. Switching engines doesn't
-  mean relearning the app.
-- **Low overhead** - Only one core runs at a time, talking directly
-  to the iOS `utun` device. No userspace `tun→socks` bridge, no
-  extra hops, no idle daemons in the background.
-- **BYOC (Bring Your Own Config)** - Paste a URL, import a file, or
-  type one in. Whatever config you already have, it just works — no
-  conversion, no lock-in.
-- **Configuration as craft** - Your config decides how your phone
-  meets the internet. The editor inside Everywhere gives it the
-  treatment it deserves, so writing it feels less like filling a
-  form and more like making something.
-- **Total transparency** - Nothing about the tunnel is hidden from
-  you. Every byte, every connection, every routing decision shows
-  up the moment it happens, right inside the app.
-- **Engineered isolation** - Three engines in one app, never in
-  each other's way. Each lives in its own world, with its own
-  files, its own state, its own rules.
-
-## Getting Started
-
-### Build from Source
+## Build
 
 ```bash
-git clone https://github.com/NodePassProject/Everywhere.git
-cd Everywhere
+git clone https://github.com/decoder-dev/decoder-sec.git
+cd decoder-sec
 ./build.sh
-open Everywhere.xcodeproj
+open DecoderSec.xcodeproj
 ```
 
-`build.sh` wires the `EverywhereCore` SwiftPM dependency + Runestone +
-the bundled zashboard into the Xcode project. The Go cores themselves
-are downloaded as a prebuilt xcframework by SwiftPM on first resolve,
-and the zashboard is checked into `ThirdParty/zashboard/` as a prebuilt
-static bundle — no Node, no pnpm, no Vite step. Plug in your signing
-identity and run on a device or the simulator.
-
-To run an `xcodebuild` simulator smoke test as the final step:
+Unsigned IPA (CI / local macOS):
 
 ```bash
-./build.sh --build-app
+./Scripts/ci_export_ipa.sh
 ```
 
-## Acknowledgements
-
-Everywhere stands on the shoulders of the projects that do the real
-networking work:
-
-- [Xray-core](https://github.com/XTLS/Xray-core)
-- [sing-box](https://github.com/SagerNet/sing-box)
-- [mihomo](https://github.com/MetaCubeX/mihomo)
-- [zashboard](https://github.com/Zephyruso/zashboard)
-- [Runestone](https://github.com/simonbs/Runestone)
-
-Huge thanks to everyone who maintains them.
-
-## Related Projects
-
-<table>
-<tr>
-<td width="100" valign="middle">
-<a href="https://apps.apple.com/us/app/id6758235178"><img width="80" height="80" alt="Anywhere" src="https://storage.argsment.com/Anywhere-AppIcon-iOS.png" /></a>
-</td>
-<td valign="middle">
-<a href="https://github.com/NodePassProject/Anywhere"><b>Anywhere</b></a><br>
-<sub>The best native proxy client for iOS, iPadOS, and tvOS.</sub>
-</td>
-</tr>
-</table>
+Requires: Xcode 16+, Apple Team with Network Extension + App Group for the IDs above.
 
 ## License
 
-Everywhere is licensed under the [GNU General Public License v3.0](LICENSE).
+GPLv3 — see [LICENSE](./LICENSE).
 
-Copyright © 2026 NodePassProject.
-
-If you ship a modification, ship the source too. That's the deal.
-
----
-
-If Everywhere makes your phone's network behave the way you want, give
-the repo a star — it helps others find it.
+Upstream networking cores: Xray-core, sing-box, mihomo.  
+Application lineage: [NodePassProject/Everywhere](https://github.com/NodePassProject/Everywhere).

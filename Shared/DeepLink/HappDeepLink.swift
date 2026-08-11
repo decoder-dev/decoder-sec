@@ -1,6 +1,6 @@
 //
 //  HappDeepLink.swift
-//  Everywhere
+//  DecoderSec
 //
 //  Happ-compatible deep link grammar (provider bots / QR / Telegram).
 //  Spec references:

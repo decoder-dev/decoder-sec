@@ -1,6 +1,6 @@
 //
 //  SingBoxNormalizer.swift
-//  Everywhere
+//  DecoderSec
 //
 //  Created by NodePassProject on 5/24/26.
 //
@@ -17,7 +17,7 @@ enum SingBoxNormalizer: JSONCoreNormalizer {
         if let first = inbounds.firstIndex(where: { isTunInbound($0, typeKey: "type") }) {
             var patched = inbounds[first]
             patched["type"] = "tun"
-            patched["tag"] = everywhereTag
+            patched["tag"] = decoderTunTag
             patched["address"] = [tunnelPrefix, tunnelPrefix6]
             patched["mtu"] = tunnelMTU
             patched["stack"] = tunStack
@@ -28,7 +28,7 @@ enum SingBoxNormalizer: JSONCoreNormalizer {
         } else {
             inbounds.append([
                 "type": "tun",
-                "tag": everywhereTag,
+                "tag": decoderTunTag,
                 "address": [tunnelPrefix, tunnelPrefix6],
                 "mtu": tunnelMTU,
                 "stack": tunStack,

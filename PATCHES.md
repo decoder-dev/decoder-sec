@@ -1,6 +1,6 @@
 # Patches
 
-Consumer-side notes for `Everywhere` (iOS). Build mechanics, upstream
+Consumer-side notes for `DecoderSec` (iOS). Build mechanics, upstream
 tag matrix, `gomobile bind` flags, and per-core wiring quirks now live
 upstream at
 [NodePassProject/EverywhereCore](https://github.com/NodePassProject/EverywhereCore) —
@@ -52,7 +52,7 @@ an Xcode UI edit reasserts them.
 - `IPHONEOS_DEPLOYMENT_TARGET = 15.0` — the app's lower bound. Upstream
   `EverywhereCore`'s `Package.swift` requires `.iOS(.v15)`, so this is
   the floor.
-- `libresolv.tbd` linked into both `Everywhere` and `EverywhereNE` —
+- `libresolv.tbd` linked into both `DecoderSec` and `DecoderSecTunnel` —
   the Go runtime's DNS resolver path on darwin pulls `res_*` symbols
   from `libresolv`.
 - No manual `Embed Frameworks` entry for the SwiftPM product. Xcode
@@ -70,9 +70,9 @@ an Xcode UI edit reasserts them.
 ## NEPacketTunnelProvider on iOS
 
 The Network Extension is shipped as an `.appex` bundled in
-`Everywhere.app/PlugIns/`. The provider is loaded by the system's
+`DecoderSec.app/PlugIns/`. The provider is loaded by the system's
 `nesessionmanager`, talks to the app over the App Group container
-`group.com.argsment.Everywhere`, and owns the `utun` device. The
+`group.com.decodersec.app`, and owns the `utun` device. The
 extension links against the same `EverywhereCore` SwiftPM product as
 the app and resolves the framework at runtime from the host app's
 `Frameworks/` directory — only the app target embeds, not the extension.

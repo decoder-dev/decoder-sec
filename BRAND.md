@@ -1,16 +1,18 @@
 # Brand — decoder sec.
 
-Premium OLED dark identity for this Everywhere fork.
-
 | Token | Value |
 |-------|-------|
+| Product | decoder-sec |
 | Display name | `decoder sec.` |
+| Xcode | `DecoderSec.xcodeproj` |
+| App target | `DecoderSec` |
+| Tunnel target | `DecoderSecTunnel` |
 | Bundle ID | `com.decodersec.app` |
 | Network Extension | `com.decodersec.app.PacketTunnel` |
 | App Group | `group.com.decodersec.app` |
 | Accent | neon emerald `#00FF6A` |
 | Background | true black `#000000` |
 
-Assets: `Assets.xcassets/BrandLogo`, `AppIcon.appiconset`, `AppIcon.icon`.
+Assets live under `DecoderSec/Assets.xcassets` (`BrandLogo`, `AppIcon`) and `DecoderSec/AppIcon.icon`.
 
-Register the App Group + Network Extension capability for the new IDs in your Apple Developer account before device installs.
+Register App Group + Network Extension for these IDs in Apple Developer before device installs.

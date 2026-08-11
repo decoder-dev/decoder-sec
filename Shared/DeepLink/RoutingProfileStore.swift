@@ -1,6 +1,6 @@
 //
 //  RoutingProfileStore.swift
-//  Everywhere
+//  DecoderSec
 //
 //  Stores Happ routing profiles imported via happ://routing/...
 //

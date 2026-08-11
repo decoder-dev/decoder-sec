@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Archive Everywhere and produce an .ipa for GitHub Actions / local CI.
+# Archive DecoderSec and produce an .ipa for GitHub Actions / local CI.
 #
 # Modes:
 #   SIGNING=unsigned   — archive with CODE_SIGNING_ALLOWED=NO, zip Payload → .ipa
@@ -8,7 +8,7 @@
 # Env:
 #   CONFIGURATION   Debug|Release (default Release)
 #   DERIVED_DATA    path (default ./DerivedData)
-#   ARCHIVE_PATH    path (default ./build/Everywhere.xcarchive)
+#   ARCHIVE_PATH    path (default ./build/DecoderSec.xcarchive)
 #   IPA_DIR         path (default ./build/ipa)
 #   EXPORT_OPTIONS  plist path (default Config/ExportOptions-ad-hoc.plist)
 #   DEVELOPMENT_TEAM optional Apple Team ID override
@@ -20,7 +20,7 @@ cd "$ROOT"
 
 CONFIGURATION="${CONFIGURATION:-Release}"
 DERIVED_DATA="${DERIVED_DATA:-$ROOT/DerivedData}"
-ARCHIVE_PATH="${ARCHIVE_PATH:-$ROOT/build/Everywhere.xcarchive}"
+ARCHIVE_PATH="${ARCHIVE_PATH:-$ROOT/build/DecoderSec.xcarchive}"
 IPA_DIR="${IPA_DIR:-$ROOT/build/ipa}"
 SIGNING="${SIGNING:-unsigned}"
 EXPORT_OPTIONS="${EXPORT_OPTIONS:-$ROOT/Config/ExportOptions-ad-hoc.plist}"
@@ -40,8 +40,8 @@ echo "→ wire SwiftPM deps"
 echo "→ archive ($CONFIGURATION, signing=$SIGNING)"
 if [[ "$SIGNING" == "unsigned" ]]; then
   xcodebuild \
-    -project Everywhere.xcodeproj \
-    -scheme Everywhere \
+    -project DecoderSec.xcodeproj \
+    -scheme DecoderSec \
     -configuration "$CONFIGURATION" \
     -destination 'generic/platform=iOS' \
     -archivePath "$ARCHIVE_PATH" \
@@ -53,8 +53,8 @@ if [[ "$SIGNING" == "unsigned" ]]; then
     archive
 else
   xcodebuild \
-    -project Everywhere.xcodeproj \
-    -scheme Everywhere \
+    -project DecoderSec.xcodeproj \
+    -scheme DecoderSec \
     -configuration "$CONFIGURATION" \
     -destination 'generic/platform=iOS' \
     -archivePath "$ARCHIVE_PATH" \
@@ -85,9 +85,9 @@ mkdir -p "$STAGE/Payload"
 cp -R "$APP_PATH" "$STAGE/Payload/"
 (
   cd "$STAGE"
-  zip -qry "$IPA_DIR/Everywhere-unsigned.ipa" Payload
+  zip -qry "$IPA_DIR/DecoderSec-unsigned.ipa" Payload
 )
 rm -rf "$STAGE"
 
-echo "✓ unsigned IPA: $IPA_DIR/Everywhere-unsigned.ipa"
+echo "✓ unsigned IPA: $IPA_DIR/DecoderSec-unsigned.ipa"
 ls -lah "$IPA_DIR"
