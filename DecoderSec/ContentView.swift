@@ -5,6 +5,7 @@
 //  Created by NodePassProject on 5/2/26.
 //
 
+import NetworkExtension
 import SwiftUI
 
 struct ContentView: View {
