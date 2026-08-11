@@ -1,4 +1,39 @@
-# Releases
+# Install
+
+## Pick an IPA
+
+| Asset | Use when |
+|-------|----------|
+| `DecoderSec-*-lite-unsigned.ipa` | You want the app to **open after one simple resign** (configs / deep links; no VPN) |
+| `DecoderSec-*-unsigned.ipa` | You need real VPN (Packet Tunnel) |
+
+## One-command resign
+
+```bash
+# Lite (simplest)
+./Scripts/resign_ipa.sh --lite \
+  --ipa DecoderSec-vX.Y.Z-lite-unsigned.ipa \
+  --profile App.mobileprovision \
+  --identity "Apple Development: You (TEAMID)"
+
+# Full VPN (app + extension in one step, no App Group)
+./Scripts/resign_ipa.sh \
+  --ipa DecoderSec-vX.Y.Z-unsigned.ipa \
+  --profile App.mobileprovision \
+  --identity "Apple Development: You (TEAMID)"
+```
+
+If iOS requires a separate extension profile:
+
+```bash
+./Scripts/resign_ipa.sh \
+  --ipa DecoderSec-vX.Y.Z-unsigned.ipa \
+  --profile App.mobileprovision \
+  --tunnel-profile Tunnel.mobileprovision \
+  --identity "Apple Development: You (TEAMID)"
+```
+
+Full VPN needs Network Extension (packet-tunnel) on the profile(s). No App Group.
 
 ## Tags
 
@@ -9,26 +44,13 @@
 | `vX.Y.Z-rc.N` | Release candidate |
 | `vX.Y.Z-alpha.N` | Early preview |
 
-Pushing a `v*` tag runs **Build IPA** and publishes a GitHub Release (prerelease if the tag contains `alpha` / `beta` / `rc` / `dev` / `pre`).
+Pushing a `v*` tag runs **Build IPA** and publishes a GitHub Release (prerelease if the tag contains `alpha` / `beta` / `rc` / `dev` / `pre`). Each release includes **both** full and lite unsigned IPAs.
 
 ```bash
-git tag -a v0.1.0-beta.3 -m "decoder sec. v0.1.0-beta.3"
-git push origin v0.1.0-beta.3
+git tag -a v0.1.0-beta.4 -m "decoder sec. v0.1.0-beta.4"
+git push origin v0.1.0-beta.4
 ```
 
 ## Manual prerelease
 
-Actions → **Build IPA** → Run workflow:
-
-- `publish_prerelease`: true  
-- `prerelease_tag`: e.g. `v0.1.0-beta.3` (optional)
-
-## Install
-
-Unsigned IPA must be resigned (Sideloadly / AltStore / Apple cert) with:
-
-- App ID `com.decodersec.app`
-- Extension `com.decodersec.app.PacketTunnel`
-- Network Extension (packet tunnel)
-
-No App Group required.
+Actions → **Build IPA** → Run workflow with `publish_prerelease: true`.

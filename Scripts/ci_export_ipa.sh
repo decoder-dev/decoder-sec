@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Archive DecoderSec and produce an .ipa for GitHub Actions / local CI.
+# Archive DecoderSec and produce unsigned .ipa file(s) for GitHub Actions / local CI.
 #
 # Modes:
 #   SIGNING=unsigned   — archive with CODE_SIGNING_ALLOWED=NO, zip Payload → .ipa
 #   SIGNING=manual     — use cert/profile already installed in the keychain
+#   BOTH=1 (default)   — emit full VPN IPA + Lite (no PacketTunnel) from one archive
+#   LITE=1             — Lite only (UI / config browsing)
+#   LITE=0 BOTH=0      — full VPN IPA only
 #
 # Env:
 #   CONFIGURATION   Debug|Release (default Release)
@@ -23,6 +26,8 @@ ARCHIVE_PATH="${ARCHIVE_PATH:-$ROOT/build/DecoderSec.xcarchive}"
 IPA_DIR="${IPA_DIR:-$ROOT/build/ipa}"
 SIGNING="${SIGNING:-unsigned}"
 EXPORT_OPTIONS="${EXPORT_OPTIONS:-$ROOT/Config/ExportOptions-ad-hoc.plist}"
+LITE="${LITE:-0}"
+BOTH="${BOTH:-1}"
 
 mkdir -p "$(dirname "$ARCHIVE_PATH")" "$IPA_DIR" "$DERIVED_DATA"
 
@@ -41,7 +46,25 @@ if [[ -n "${DEVELOPMENT_TEAM:-}" ]]; then
   COMMON+=(DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM")
 fi
 
-echo "→ archive ($CONFIGURATION, signing=$SIGNING)"
+case "$(printf '%s' "$LITE" | tr '[:upper:]' '[:lower:]')" in
+  1|true|yes|lite) IS_LITE=1 ;;
+  *) IS_LITE=0 ;;
+esac
+case "$(printf '%s' "$BOTH" | tr '[:upper:]' '[:lower:]')" in
+  1|true|yes|both) IS_BOTH=1 ;;
+  *) IS_BOTH=0 ;;
+esac
+
+if [[ "$IS_LITE" == "1" ]]; then
+  IS_BOTH=0
+fi
+
+if [[ ("$IS_LITE" == "1" || "$IS_BOTH" == "1") && "$SIGNING" != "unsigned" ]]; then
+  echo "error: Lite / BOTH variants are only supported for unsigned exports; resign afterwards." >&2
+  exit 1
+fi
+
+echo "→ archive ($CONFIGURATION, signing=$SIGNING, lite=$IS_LITE, both=$IS_BOTH)"
 if [[ "$SIGNING" == "unsigned" ]]; then
   xcodebuild "${COMMON[@]}" \
     CODE_SIGNING_ALLOWED=NO \
@@ -69,14 +92,31 @@ if [[ -z "$APP_PATH" ]]; then
   exit 1
 fi
 
-STAGE="$(mktemp -d)"
-mkdir -p "$STAGE/Payload"
-cp -R "$APP_PATH" "$STAGE/Payload/"
-(
-  cd "$STAGE"
-  zip -qry "$IPA_DIR/DecoderSec-unsigned.ipa" Payload
-)
-rm -rf "$STAGE"
+pack_ipa() {
+  local lite="$1"
+  local name="$2"
+  local stage
+  stage="$(mktemp -d)"
+  mkdir -p "$stage/Payload"
+  cp -R "$APP_PATH" "$stage/Payload/"
+  if [[ "$lite" == "1" ]]; then
+    rm -rf "$stage/Payload/$(basename "$APP_PATH")/PlugIns"
+  fi
+  (
+    cd "$stage"
+    zip -qry "$IPA_DIR/$name" Payload
+  )
+  rm -rf "$stage"
+  echo "✓ unsigned IPA: $IPA_DIR/$name"
+}
 
-echo "✓ unsigned IPA: $IPA_DIR/DecoderSec-unsigned.ipa"
+if [[ "$IS_BOTH" == "1" ]]; then
+  pack_ipa 0 "DecoderSec-unsigned.ipa"
+  pack_ipa 1 "DecoderSec-lite-unsigned.ipa"
+elif [[ "$IS_LITE" == "1" ]]; then
+  pack_ipa 1 "DecoderSec-lite-unsigned.ipa"
+else
+  pack_ipa 0 "DecoderSec-unsigned.ipa"
+fi
+
 ls -lah "$IPA_DIR"

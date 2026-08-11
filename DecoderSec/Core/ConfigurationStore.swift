@@ -14,6 +14,11 @@ final class ConfigurationStore: ObservableObject {
 
     @Published private(set) var configurations: [Configuration] = []
 
+    /// Non-nil when the Core Data store could not be opened (or the
+    /// `Configuration` entity is missing from the loaded model). When set, the
+    /// store operates in a degraded, read-only mode instead of crashing.
+    @Published private(set) var storeError: String?
+
     /// The core the user is currently working with — drives what
     /// HomeView's picker reads/writes and what `ConfigurationsView`
     /// filters its list by.
@@ -42,16 +47,37 @@ final class ConfigurationStore: ObservableObject {
     private let context: NSManagedObjectContext
 
     private init() {
-        self.context = PersistenceController.shared.container.viewContext
+        let persistence = PersistenceController.shared
+        self.context = persistence.container.viewContext
 
         self.selectedCore = EVCore.getSelectedCore()
 
         loadActiveMap()
+
+        // Never touch the store when it failed to load, or when the loaded
+        // model somehow lacks the Configuration entity. Reading/writing either
+        // one raises an uncatchable ObjC exception that would kill the process
+        // on launch. Surface a soft error instead.
+        guard isStoreUsable else {
+            storeError = persistence.storeLoadError?.localizedDescription
+                ?? "Local storage is unavailable — configurations can't be saved this session."
+            return
+        }
+
         reload()
         seedIfEmpty()
     }
 
+    /// True only when persistence loaded a store AND the model actually contains
+    /// the `Configuration` entity. Both are required before any fetch/insert.
+    private var isStoreUsable: Bool {
+        guard PersistenceController.shared.isStoreLoaded else { return false }
+        let model = context.persistentStoreCoordinator?.managedObjectModel
+        return model?.entitiesByName["Configuration"] != nil
+    }
+
     func reload() {
+        guard isStoreUsable else { return }
         let request = NSFetchRequest<Configuration>(entityName: "Configuration")
         request.sortDescriptors = [
             NSSortDescriptor(keyPath: \Configuration.createdAt, ascending: true)
@@ -69,7 +95,8 @@ final class ConfigurationStore: ObservableObject {
     }
 
     @discardableResult
-    func create(name: String, type: CoreType, content: String, sourceURL: String? = nil) -> Configuration {
+    func create(name: String, type: CoreType, content: String, sourceURL: String? = nil) -> Configuration? {
+        guard isStoreUsable else { return nil }
         let cfg = Configuration(context: context)
         cfg.id = UUID()
         cfg.name = name

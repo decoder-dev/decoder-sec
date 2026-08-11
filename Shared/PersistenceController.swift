@@ -19,27 +19,25 @@ final class PersistenceController {
     var viewContext: NSManagedObjectContext { container.viewContext }
 
     init(inMemory: Bool = false) {
-        container = NSPersistentContainer(name: "Model")
+        container = NSPersistentContainer(name: "Model", managedObjectModel: Self.makeManagedObjectModel())
 
-        if inMemory {
-            container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
-        } else {
-            let storeURL = EVCore.containerURL.appendingPathComponent("Model.sqlite")
-            let description = NSPersistentStoreDescription(url: storeURL)
-            description.shouldMigrateStoreAutomatically = true
-            description.shouldInferMappingModelAutomatically = true
-            container.persistentStoreDescriptions = [description]
-        }
+        container.persistentStoreDescriptions = [Self.storeDescription(inMemory: inMemory)]
 
-        var loadError: Error?
-        container.loadPersistentStores { _, error in
-            if let error {
-                loadError = error
-                NSLog("[Persistence] store load failed: \(error.localizedDescription)")
+        let primaryError = Self.loadStore(into: container)
+        if let primaryError, !inMemory {
+            NSLog("[Persistence] store load failed, falling back to memory: \(primaryError.localizedDescription)")
+            container.persistentStoreCoordinator.persistentStores.forEach {
+                try? container.persistentStoreCoordinator.remove($0)
             }
+            container.persistentStoreDescriptions = [Self.storeDescription(inMemory: true)]
         }
-        storeLoadError = loadError
-        isStoreLoaded = loadError == nil
+
+        let fallbackError = primaryError == nil || inMemory ? primaryError : Self.loadStore(into: container)
+        if let fallbackError {
+            NSLog("[Persistence] in-memory fallback failed: \(fallbackError.localizedDescription)")
+        }
+        storeLoadError = primaryError ?? fallbackError
+        isStoreLoaded = fallbackError == nil
 
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
@@ -62,5 +60,60 @@ final class PersistenceController {
             NSLog("[Persistence] save failed: \(error.localizedDescription)")
             return false
         }
+    }
+
+    private static func storeDescription(inMemory: Bool) -> NSPersistentStoreDescription {
+        let description = NSPersistentStoreDescription()
+        if inMemory {
+            description.type = NSInMemoryStoreType
+        } else {
+            description.url = EVCore.containerURL.appendingPathComponent("Model.sqlite")
+        }
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
+        return description
+    }
+
+    private static func loadStore(into container: NSPersistentContainer) -> Error? {
+        var loadError: Error?
+        let semaphore = DispatchSemaphore(value: 0)
+        container.loadPersistentStores { _, error in
+            loadError = error
+            semaphore.signal()
+        }
+        semaphore.wait()
+        return loadError
+    }
+
+    private static func makeManagedObjectModel() -> NSManagedObjectModel {
+        let entity = NSEntityDescription()
+        entity.name = "Configuration"
+        // Must match @objc(Configuration) — do not use NSStringFromClass (module prefix breaks).
+        entity.managedObjectClassName = "Configuration"
+        entity.properties = [
+            attribute("id", type: .UUIDAttributeType),
+            attribute("name", type: .stringAttributeType),
+            attribute("type", type: .stringAttributeType),
+            attribute("content", type: .stringAttributeType),
+            attribute("createdAt", type: .dateAttributeType),
+            attribute("updatedAt", type: .dateAttributeType),
+            attribute("sourceURL", type: .stringAttributeType, optional: true),
+        ]
+
+        let model = NSManagedObjectModel()
+        model.entities = [entity]
+        return model
+    }
+
+    private static func attribute(
+        _ name: String,
+        type: NSAttributeType,
+        optional: Bool = false
+    ) -> NSAttributeDescription {
+        let attribute = NSAttributeDescription()
+        attribute.name = name
+        attribute.attributeType = type
+        attribute.isOptional = optional
+        return attribute
     }
 }

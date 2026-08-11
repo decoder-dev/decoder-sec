@@ -6,9 +6,23 @@ All notable changes to **decoder sec.** are documented here.
 
 ### Planned
 - Subscription UX (node list / one-tap connect)
-- Lite Network Extension mode
 - `ru` / `en` localization
 - Signed TestFlight builds
+
+## [0.1.0-beta.4] — 2026-08-11
+
+### Fixed
+- Launch crash: Core Data model is built in code (repo had no `Model.xcdatamodeld`)
+- Soft degrade + UI banner if storage cannot open
+- PacketTunnel no longer compiles Core Data / DeepLink sources
+
+### Added
+- `Scripts/resign_ipa.sh` — one command signs app + PacketTunnel (no App Groups)
+- Every CI build ships **two** IPAs: full (VPN) + **lite** (UI only, simple resign)
+
+### Notes
+- Prefer **lite** if you only need the app to open after one simple resign
+- Full VPN still needs Network Extension on the profile; use `resign_ipa.sh` once
 
 ## [0.1.0-beta.3] — 2026-08-11
 

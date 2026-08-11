@@ -87,12 +87,17 @@ final class DeepLinkCenter: ObservableObject {
         if core == .xray, routing.routingEnabled, let profile = routing.activeProfile {
             content = try HappRoutingApplier.apply(profile: profile, toXrayJSON: content)
         }
-        let cfg = store.create(
+        guard let cfg = store.create(
             name: result.name,
             type: core,
             content: content,
             sourceURL: result.sourceURL
-        )
+        ) else {
+            throw NSError(domain: "DeepLinkCenter", code: -10, userInfo: [
+                NSLocalizedDescriptionKey: store.storeError
+                    ?? "Local storage is unavailable — can't save the imported subscription."
+            ])
+        }
         store.setActive(cfg)
 
         if let embedded = result.embeddedRoutingDeepLink,
@@ -115,7 +120,12 @@ final class DeepLinkCenter: ObservableObject {
             content = try HappRoutingApplier.apply(profile: profile, toXrayJSON: content)
         }
         store.selectedCore = .xray
-        let cfg = store.create(name: built.name, type: .xray, content: content)
+        guard let cfg = store.create(name: built.name, type: .xray, content: content) else {
+            throw NSError(domain: "DeepLinkCenter", code: -10, userInfo: [
+                NSLocalizedDescriptionKey: store.storeError
+                    ?? "Local storage is unavailable — can't save the imported node."
+            ])
+        }
         store.setActive(cfg)
         present("Node “\(cfg.name)” imported.")
     }

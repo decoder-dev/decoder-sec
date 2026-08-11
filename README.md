@@ -53,6 +53,46 @@ open DecoderSec.xcodeproj
 ./Scripts/ci_export_ipa.sh   # unsigned IPA → build/ipa/
 ```
 
+## Sideload signing
+
+Every GitHub build ships **two** unsigned IPAs:
+
+| File | What you get | Resign needs |
+|------|----------------|--------------|
+| `*-lite-unsigned.ipa` | UI + configs, **no VPN** | One profile for `com.decodersec.app` |
+| `*-unsigned.ipa` | Full VPN | Network Extension for app + PacketTunnel |
+
+**Want it to open after one simple resign?** Install the **lite** IPA.
+
+Full VPN — one command for both components (no App Groups):
+
+```bash
+./Scripts/resign_ipa.sh \
+  --ipa DecoderSec-unsigned.ipa \
+  --profile DecoderSec.mobileprovision \
+  --identity "Apple Development: Your Name (TEAMID)"
+```
+
+With a `.p12`:
+
+```bash
+./Scripts/resign_ipa.sh \
+  --ipa DecoderSec-unsigned.ipa \
+  --profile DecoderSec.mobileprovision \
+  --p12 cert.p12 --p12-password "$P12_PASSWORD"
+```
+
+If Apple gave you a separate extension profile, add `--tunnel-profile DecoderSecTunnel.mobileprovision`.
+
+Lite:
+
+```bash
+./Scripts/resign_ipa.sh --lite \
+  --ipa DecoderSec-lite-unsigned.ipa \
+  --profile DecoderSec.mobileprovision \
+  --identity "Apple Development: Your Name (TEAMID)"
+```
+
 Requires Xcode 16+ and an Apple Team with Network Extension for the IDs above. No App Group.
 
 ## License

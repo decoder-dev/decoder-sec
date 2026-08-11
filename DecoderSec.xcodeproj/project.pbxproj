@@ -52,6 +52,18 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D5C4C0015C4C000000000001 /* Exceptions for "Shared" folder in "DecoderSecTunnel" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Configuration.swift,
+				PersistenceController.swift,
+				DeepLink/HappDeepLink.swift,
+				DeepLink/RoutingProfileStore.swift,
+				DeepLink/ShareLinkToXray.swift,
+				DeepLink/SubscriptionImporter.swift,
+			);
+			target = CB0BA4242FA6277800E37B2C /* DecoderSecTunnel */;
+		};
 		CB0BA4312FA6277800E37B2C /* Exceptions for "DecoderSecTunnel" folder in "DecoderSecTunnel" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -71,6 +83,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		9972969AE7F1F3E248C5CD1D /* Shared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D5C4C0015C4C000000000001 /* Exceptions for "Shared" folder in "DecoderSecTunnel" target */,
+			);
 			path = Shared;
 			sourceTree = "<group>";
 		};

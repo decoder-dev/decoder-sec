@@ -48,6 +48,8 @@ jobs:
     env:
       CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
       SIGNING: ${{ github.event.inputs.signing || 'unsigned' }}
+      LITE: '0'
+      BOTH: '1'
       EVERYWHERE_CORE_MIN_VERSION: '2026.08.09'
 
     steps:
@@ -109,8 +111,10 @@ jobs:
         env:
           DEVELOPMENT_TEAM: ${{ secrets.TEAM_ID }}
         run: |
-          chmod +x Scripts/ci_export_ipa.sh build.sh
-          ./Scripts/ci_export_ipa.sh
+          set -euo pipefail
+          chmod +x Scripts/ci_export_ipa.sh Scripts/resign_ipa.sh build.sh
+          # One archive → full VPN IPA + Lite (no PacketTunnel)
+          BOTH=1 ./Scripts/ci_export_ipa.sh
           ls -lah build/ipa/
 
       - name: Rename IPA with version
@@ -126,12 +130,21 @@ jobs:
           else
             VER="v0.0.0-dev.${SHA_SHORT}"
           fi
-          SRC="$(ls build/ipa/*.ipa | head -n1)"
-          DEST="build/ipa/DecoderSec-${VER}-unsigned.ipa"
-          mv "$SRC" "$DEST"
+
+          FULL_SRC="$(ls build/ipa/DecoderSec-unsigned.ipa 2>/dev/null || true)"
+          LITE_SRC="$(ls build/ipa/DecoderSec-lite-unsigned.ipa 2>/dev/null || true)"
+          # Fallback if only one file was produced
+          if [[ -z "$FULL_SRC" && -z "$LITE_SRC" ]]; then
+            FULL_SRC="$(ls build/ipa/*.ipa | head -n1)"
+          fi
+          if [[ -n "$FULL_SRC" ]]; then
+            mv "$FULL_SRC" "build/ipa/DecoderSec-${VER}-unsigned.ipa"
+          fi
+          if [[ -n "$LITE_SRC" ]]; then
+            mv "$LITE_SRC" "build/ipa/DecoderSec-${VER}-lite-unsigned.ipa"
+          fi
+
           echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "ipa=$DEST" >> "$GITHUB_OUTPUT"
-          # prerelease if tag has beta/rc/alpha/dev OR workflow_dispatch publish
           PRE=false
           if [[ "$VER" =~ (alpha|beta|rc|dev|pre) ]]; then PRE=true; fi
           if [[ "${{ github.event.inputs.publish_prerelease }}" == "true" ]]; then PRE=true; fi
@@ -159,7 +172,16 @@ jobs:
           body: |
             ## decoder sec. `${{ steps.meta.outputs.version }}`
 
-            Unsigned IPA — resign before install (Network Extension packet-tunnel; no App Group).
+            Two unsigned IPAs in this release:
+
+            1. **`DecoderSec-…-lite-unsigned.ipa`** — UI only (no Packet Tunnel). Resign **once** with any profile for `com.decodersec.app`. Opens, imports configs, no VPN.
+            2. **`DecoderSec-…-unsigned.ipa`** — full VPN. Resign with Network Extension packet-tunnel for app + `com.decodersec.app.PacketTunnel` (one command: `Scripts/resign_ipa.sh`). No App Group.
+
+            ```bash
+            ./Scripts/resign_ipa.sh --ipa DecoderSec-…-unsigned.ipa \
+              --profile App.mobileprovision \
+              --identity "Apple Development: You (TEAMID)"
+            ```
 
             - Bundle ID: `com.decodersec.app`
             - Tunnel: `com.decodersec.app.PacketTunnel`
@@ -181,7 +203,8 @@ jobs:
 
             Built from `${{ github.sha }}` via workflow_dispatch.
 
-            Unsigned IPA — resign before install.
+            Prefer **lite** IPA if you only need the UI. Full IPA needs Network Extension when resigning.
+            Use `Scripts/resign_ipa.sh` for one-command signing.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

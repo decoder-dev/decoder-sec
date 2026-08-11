@@ -44,14 +44,21 @@ struct ContentView: View {
             if !running { minimized = false }
         }
         .overlay(alignment: .top) {
-            if deepLinks.isBusy {
-                ProgressView("Handling deep link…")
-                    .tint(Brand.Color.neon)
-                    .padding(10)
-                    .background(Brand.Color.surface.opacity(0.92), in: Capsule())
-                    .overlay(Capsule().stroke(Brand.Color.hairline, lineWidth: 1))
-                    .padding(.top, 8)
+            VStack(spacing: 8) {
+                if let storeError = store.storeError {
+                    storageBanner(storeError)
+                }
+                if deepLinks.isBusy {
+                    ProgressView("Handling deep link…")
+                        .tint(Brand.Color.neon)
+                        .padding(10)
+                        .background(Brand.Color.surface.opacity(0.92), in: Capsule())
+                        .overlay(Capsule().stroke(Brand.Color.hairline, lineWidth: 1))
+                }
             }
+            .padding(.top, 8)
+            .padding(.horizontal, 16)
+            .animation(.default, value: store.storeError)
         }
         .alert(
             Brand.displayName,
@@ -79,6 +86,32 @@ struct ContentView: View {
 
     private func stopTunnel() {
         Task { await tunnel.setEnabled(false, configuration: store.active) }
+    }
+
+    /// Lightweight, non-blocking notice shown when local storage is degraded.
+    /// The app stays usable; configurations just can't be persisted this run.
+    private func storageBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Storage unavailable")
+                    .font(Brand.Font.mono(11, weight: .semibold))
+                    .foregroundStyle(Brand.Color.primaryText)
+                Text(message)
+                    .font(Brand.Font.mono(10))
+                    .foregroundStyle(Brand.Color.secondaryText)
+                    .lineLimit(3)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Brand.Color.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Brand.Color.hairline, lineWidth: 1)
+        )
     }
 }
 

@@ -45,7 +45,7 @@ final class TunnelManager: ObservableObject {
                 queryCoreStatus()
             }
         } catch {
-            self.lastError = error.localizedDescription
+            self.lastError = Self.userFacingError(error)
             self.isReady = true
         }
     }
@@ -73,7 +73,7 @@ final class TunnelManager: ObservableObject {
             }
             lastError = nil
         } catch {
-            lastError = error.localizedDescription
+            lastError = Self.userFacingError(error)
         }
     }
 
@@ -84,7 +84,7 @@ final class TunnelManager: ObservableObject {
             try await disableTunnel()
         } catch {
             pendingReconnect = false
-            lastError = error.localizedDescription
+            lastError = Self.userFacingError(error)
         }
     }
 
@@ -107,7 +107,7 @@ final class TunnelManager: ObservableObject {
             try await m.saveToPreferences()
             manager = m
         } catch {
-            lastError = error.localizedDescription
+            lastError = Self.userFacingError(error)
         }
     }
 
@@ -226,7 +226,7 @@ final class TunnelManager: ObservableObject {
                 lastError = "Tunnel reset after timing out. Check the configuration and try again."
             }
         } catch {
-            lastError = error.localizedDescription
+            lastError = Self.userFacingError(error)
         }
     }
     
@@ -252,6 +252,20 @@ final class TunnelManager: ObservableObject {
                 }
             }
         }
+    }
+
+    private static func userFacingError(_ error: Error) -> String {
+        let nsError = error as NSError
+        let text = nsError.localizedDescription
+        let haystack = "\(nsError.domain) \(text)".lowercased()
+        if haystack.contains("neconfiguration")
+            || haystack.contains("nevpn")
+            || haystack.contains("entitlement")
+            || haystack.contains("permission")
+            || haystack.contains("not authorized") {
+            return "VPN is not available for this install. Resign the full IPA with a provisioning profile that includes Network Extension packet-tunnel, or use a Lite IPA for config browsing."
+        }
+        return text
     }
 }
 
