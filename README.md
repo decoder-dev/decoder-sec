@@ -35,7 +35,11 @@
 | Packet Tunnel | `com.decodersec.app.PacketTunnel` |
 | App Group | `group.com.decodersec.app` |
 
-[BRAND.md](./BRAND.md) · [DEEPLINKS.md](./DEEPLINKS.md) · [FORK.md](./FORK.md)
+[BRAND.md](./BRAND.md) · [DEEPLINKS.md](./DEEPLINKS.md) · [FORK.md](./FORK.md) · [CHANGELOG.md](./CHANGELOG.md) · [Releases](./docs/RELEASES.md)
+
+## Downloads
+
+Prerelease IPAs: **[GitHub Releases](https://github.com/decoder-dev/decoder-sec/releases)** (unsigned — resign before install).
 
 ## Build
 

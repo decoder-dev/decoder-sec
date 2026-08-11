@@ -10,6 +10,13 @@ All notable changes to **decoder sec.** are documented here.
 - `ru` / `en` localization
 - Signed TestFlight builds
 
+## [0.1.0-beta.2] — 2026-08-11
+
+### Fixed
+- Crash on launch when App Group is missing (unsigned sideload): fall back to local Application Support + `UserDefaults.standard` instead of `fatalError`
+- Soft Core Data recovery if the primary store fails to open
+- Banner when running without App Group (VPN needs proper signing)
+
 ## [0.1.0-beta.1] — 2026-08-11
 
 First public prerelease of the decoder-sec product line.

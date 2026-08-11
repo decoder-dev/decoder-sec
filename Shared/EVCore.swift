@@ -24,7 +24,12 @@ final class EVCore {
     /// Fallback DNS servers used when the user hasn't customized them.
     static let defaultDNSServers = ["1.1.1.1", "8.8.8.8"]
 
-    /// App Group `UserDefaults` shared between the app and Network Extension.
+    /// True when the App Group entitlement is missing / unusable
+    /// (common with unsigned sideloads). App still runs on local storage;
+    /// the Network Extension cannot share the DB until App Group works.
+    private(set) static var isUsingAppGroupFallback = false
+
+    /// App Group `UserDefaults` when available, otherwise `.standard`.
     /// Prefer the typed `getX` / `setX` accessors below over direct access.
     ///
     /// Lazily initialized: the first access registers the values in
@@ -32,7 +37,19 @@ final class EVCore {
     /// have not been explicitly written, so user-set values always win.
     /// Swift's `static let` semantics make this thread-safe and run-once.
     private static let userDefaults: UserDefaults = {
-        let defaults = UserDefaults(suiteName: Identifier.appGroupSuite)!
+        if let suite = UserDefaults(suiteName: Identifier.appGroupSuite) {
+            // suiteName succeeds even when the group isn't entitled on some
+            // OS versions; verify the container exists before trusting it.
+            if FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: Identifier.appGroupSuite
+            ) != nil {
+                suite.register(defaults: registeredDefaults)
+                return suite
+            }
+        }
+        isUsingAppGroupFallback = true
+        NSLog("DecoderSec: App Group %@ unavailable — using UserDefaults.standard", Identifier.appGroupSuite)
+        let defaults = UserDefaults.standard
         defaults.register(defaults: registeredDefaults)
         return defaults
     }()
@@ -64,13 +81,20 @@ final class EVCore {
 
     // MARK: - App Group Container
 
-    /// On-disk container shared between the app and Network Extension.
+    /// Shared container when App Group works; otherwise Application Support.
     static var containerURL: URL {
-        guard let url = FileManager.default.containerURL(
+        if let url = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: Identifier.appGroupSuite
-        ) else {
-            fatalError("App Group container missing for \(Identifier.appGroupSuite).")
+        ) {
+            return url
         }
+        isUsingAppGroupFallback = true
+        let fm = FileManager.default
+        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fm.temporaryDirectory
+        let url = base.appendingPathComponent("DecoderSec", isDirectory: true)
+        try? fm.createDirectory(at: url, withIntermediateDirectories: true)
+        NSLog("DecoderSec: App Group container missing — fallback %@", url.path)
         return url
     }
 

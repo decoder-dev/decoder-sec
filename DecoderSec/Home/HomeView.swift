@@ -22,6 +22,17 @@ struct HomeView: View {
                 ambientBackground
 
                 VStack(spacing: 0) {
+                    if EVCore.isUsingAppGroupFallback {
+                        Text("App Group недоступен — UI работает, VPN потребует подпись с group.com.decodersec.app")
+                            .font(Brand.Font.mono(10))
+                            .foregroundStyle(Brand.Color.void)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity)
+                            .background(Brand.Color.neon.opacity(0.85))
+                    }
+
                     Spacer(minLength: 24)
 
                     brandHero

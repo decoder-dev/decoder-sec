@@ -9,7 +9,13 @@ import SwiftUI
 
 @main
 struct DecoderSecApp: App {
-    @StateObject private var deepLinks = DeepLinkCenter.shared
+    @ObservedObject private var deepLinks = DeepLinkCenter.shared
+
+    init() {
+        // Touch storage early so fallback flags are set before first view.
+        _ = EVCore.containerURL
+        _ = PersistenceController.shared
+    }
 
     var body: some Scene {
         WindowGroup {

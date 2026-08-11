@@ -17,21 +17,33 @@ final class PersistenceController {
         let model = Self.makeModel()
         container = NSPersistentContainer(name: "DecoderSec", managedObjectModel: model)
 
-        // The store lives inside the App Group container so the
-        // Network Extension can open the same SQLite and read the
-        // active config directly. Without this the NE would need
-        // the config blob shipped through providerConfiguration,
-        // which iOS caps at 512 KB.
+        // Prefer App Group so the Network Extension can open the same
+        // SQLite. If the group isn't entitled (unsigned sideload), fall
+        // back to Application Support — app UI still works.
         let storeURL = EVCore.containerURL.appendingPathComponent("DecoderSec.sqlite")
         Self.migrateLegacyStoreIfNeeded(to: storeURL, model: model)
-        container.persistentStoreDescriptions = [NSPersistentStoreDescription(url: storeURL)]
+        let description = NSPersistentStoreDescription(url: storeURL)
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
+        container.persistentStoreDescriptions = [description]
 
+        var loadError: Error?
         container.loadPersistentStores { _, error in
-            if let error {
-                fatalError("Core Data load failed: \(error)")
+            loadError = error
+        }
+        if let loadError {
+            NSLog("DecoderSec: Core Data load failed (%@) — retrying in sandbox", loadError.localizedDescription)
+            let fallback = NSPersistentContainer.defaultDirectoryURL()
+                .appendingPathComponent("DecoderSec-fallback.sqlite")
+            container.persistentStoreDescriptions = [NSPersistentStoreDescription(url: fallback)]
+            container.loadPersistentStores { _, error in
+                if let error {
+                    NSLog("DecoderSec: Core Data fallback also failed: %@", error.localizedDescription)
+                }
             }
         }
         container.viewContext.automaticallyMergesChangesFromParent = true
+        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
     }
 
     // Pre-1.1(10) builds wrote the SQLite to NSPersistentContainer's
