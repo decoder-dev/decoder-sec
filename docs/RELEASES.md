@@ -1,61 +1,30 @@
-# Install
+# Releases
 
-## Pick an IPA
+## Один файл
 
-| Asset | Use when |
-|-------|----------|
-| `DecoderSec-*-lite-unsigned.ipa` | You want the app to **open after one simple resign** (configs / deep links; no VPN) |
-| `DecoderSec-*-unsigned.ipa` | You need real VPN (Packet Tunnel) |
+Каждый тег `v*` публикует:
 
-## One-command resign
+- **`DecoderSec.ipa`** — полный рабочий клиент (приложение + Packet Tunnel)
+- `DecoderSec-vX.Y.Z.ipa` — то же содержимое с версией в имени
 
-```bash
-# Lite (simplest)
-./Scripts/resign_ipa.sh --lite \
-  --ipa DecoderSec-vX.Y.Z-lite-unsigned.ipa \
-  --profile App.mobileprovision \
-  --identity "Apple Development: You (TEAMID)"
+Lite больше не публикуется в релизы.
 
-# Full VPN (app + extension in one step, no App Group)
-./Scripts/resign_ipa.sh \
-  --ipa DecoderSec-vX.Y.Z-unsigned.ipa \
-  --profile App.mobileprovision \
-  --identity "Apple Development: You (TEAMID)"
+## ESign
+
+См. [ESIGN.md](./ESIGN.md).
+
+```text
+DecoderSec.ipa → ESign → подпись с Network Extension → Install → конфиг → Connect
 ```
-
-If iOS requires a separate extension profile:
-
-```bash
-./Scripts/resign_ipa.sh \
-  --ipa DecoderSec-vX.Y.Z-unsigned.ipa \
-  --profile App.mobileprovision \
-  --tunnel-profile Tunnel.mobileprovision \
-  --identity "Apple Development: You (TEAMID)"
-```
-
-Full VPN needs Network Extension (packet-tunnel) on the profile(s). No App Group.
 
 ## Tags
 
 | Pattern | Meaning |
 |---------|---------|
-| `vX.Y.Z` | Stable release |
+| `vX.Y.Z` | Stable |
 | `vX.Y.Z-beta.N` | Prerelease |
-| `vX.Y.Z-rc.N` | Release candidate |
-| `vX.Y.Z-alpha.N` | Early preview |
-
-Pushing a `v*` tag runs **Build IPA** and publishes a GitHub Release (prerelease if the tag contains `alpha` / `beta` / `rc` / `dev` / `pre`). Each release includes **both** full and lite unsigned IPAs.
 
 ```bash
-git tag -a v0.1.0-beta.5 -m "decoder sec. v0.1.0-beta.5"
-git push origin v0.1.0-beta.5
+git tag -a v0.1.0-beta.7 -m "decoder sec. v0.1.0-beta.7"
+git push origin v0.1.0-beta.7
 ```
-
-If an older IPA cannot unpack or install: use **beta.6+**.
-
-- beta.4 and earlier: packaging / unpack issues  
-- beta.5: shipped a static EverywhereCore `.a` as a framework → iOS refuses install  
-- beta.6: removes that framework embed + ad-hoc codesign
-## Manual prerelease
-
-Actions → **Build IPA** → Run workflow with `publish_prerelease: true`.
