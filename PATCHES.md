@@ -12,8 +12,9 @@ see its README and `Scripts/build.sh` if you need to touch the Go side.
 rather than an exact tag:
 
 ```ruby
-EVERYWHERE_CORE_MIN_VERSION = '2026.05.14'
+EVERYWHERE_CORE_MIN_VERSION = '2026.08.09'
 EVERYWHERE_CORE_REQ = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => EVERYWHERE_CORE_MIN_VERSION }
+# Optional overrides: EVERYWHERE_CORE_REPO, EVERYWHERE_CORE_MIN_VERSION env vars.
 ```
 
 `upToNextMajor` against a `vYYYY.MM.DD` tag accepts every release inside
@@ -32,7 +33,7 @@ on each tag, so only tagged releases are consumable downstream.
 
 | Package                                                    | Targets   | Pin                          |
 | ---------------------------------------------------------- | --------- | ---------------------------- |
-| `NodePassProject/EverywhereCore`                           | app + NE  | `upToNextMajor 2026.05.18`   |
+| `NodePassProject/EverywhereCore`                           | app + NE  | `upToNextMajor 2026.08.09`   |
 | `simonbs/Runestone`                                        | app       | `upToNextMajor 0.5.0`        |
 | `simonbs/TreeSitterLanguages` (JSON + YAML products)       | app       | `upToNextMajor 0.1.10`       |
 | `Argsment/YAML`                                            | app       | `branch main`                |

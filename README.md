@@ -6,7 +6,10 @@
     </a>
 </div>
 
-# Everywhere
+# Everywhere (fork)
+
+> Fork notes, core pin, IPA CI and roadmap: see **[FORK.md](./FORK.md)**.
+> EverywhereCore floor: **2026.08.09** (Xray `v1.260327.0`).
 
 **One app. Three networking engines. Your rules.**
 

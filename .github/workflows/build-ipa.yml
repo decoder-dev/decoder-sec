@@ -1,0 +1,145 @@
+name: Build IPA
+
+on:
+  push:
+    branches: [main, 'cursor/**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      signing:
+        description: 'Signing mode'
+        required: true
+        default: unsigned
+        type: choice
+        options:
+          - unsigned
+          - manual
+      configuration:
+        description: 'Xcode configuration'
+        required: true
+        default: Release
+        type: choice
+        options:
+          - Release
+          - Debug
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ipa-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    name: macOS IPA
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
+      SIGNING: ${{ github.event.inputs.signing || 'unsigned' }}
+      EVERYWHERE_CORE_MIN_VERSION: '2026.08.09'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Install Ruby deps
+        run: gem install --user-install xcodeproj
+
+      - name: Cache DerivedData / SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            DerivedData
+            ~/Library/Caches/org.swift.swiftpm
+            ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-spm-${{ hashFiles('Scripts/wire_project.rb', 'PATCHES.md') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Import signing cert (optional)
+        if: ${{ env.SIGNING == 'manual' }}
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${BUILD_CERTIFICATE_BASE64:-}" || -z "${BUILD_PROVISION_PROFILE_BASE64:-}" ]]; then
+            echo "manual signing requested but cert/profile secrets are missing" >&2
+            exit 1
+          fi
+          CERT_PATH="$RUNNER_TEMP/build_certificate.p12"
+          PROFILE_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          echo "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          echo "DEVELOPMENT_TEAM=${TEAM_ID}" >> "$GITHUB_ENV"
+          echo "Installed profile $PROFILE_UUID"
+
+      - name: Build IPA
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.TEAM_ID }}
+        run: |
+          chmod +x Scripts/ci_export_ipa.sh build.sh
+          ./Scripts/ci_export_ipa.sh
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Everywhere-ipa-${{ github.sha }}
+          path: |
+            build/ipa/*.ipa
+            build/*.xcarchive
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach IPA to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/ipa/*.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  core-freshness:
+    name: Check EverywhereCore / Xray freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compare pinned floor vs latest EverywhereCore + Xray
+        run: |
+          set -euo pipefail
+          PIN=$(ruby -e "puts File.read('Scripts/wire_project.rb')[/EVERYWHERE_CORE_MIN_VERSION = ENV.fetch\\('EVERYWHERE_CORE_MIN_VERSION', '([^']+)'\\)/, 1]")
+          echo "Pinned EverywhereCore floor: $PIN"
+          LATEST=$(curl -fsSL https://api.github.com/repos/NodePassProject/EverywhereCore/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"].lstrip("v"))')
+          echo "Latest EverywhereCore: $LATEST"
+          XRAY=$(curl -fsSL https://proxy.golang.org/github.com/xtls/xray-core/@latest)
+          echo "Latest Xray (Go proxy): $XRAY"
+          CORE_MOD=$(curl -fsSL "https://raw.githubusercontent.com/NodePassProject/EverywhereCore/v${LATEST}/go/go.mod" | awk '/xray-core/{print; exit}')
+          echo "Xray in latest EverywhereCore: $CORE_MOD"
+          if [[ "$LATEST" > "$PIN" ]]; then
+            echo "::warning::EverywhereCore floor $PIN is behind latest $LATEST — bump Scripts/wire_project.rb"
+          else
+            echo "Floor is current (>= latest tag)."
+          fi
