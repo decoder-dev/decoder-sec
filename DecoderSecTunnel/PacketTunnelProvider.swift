@@ -10,6 +10,7 @@ import EverywhereCore
 import Network
 import NetworkExtension
 
+@objc(PacketTunnelProvider)
 final class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let tunnelMTU = 1500
 

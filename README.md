@@ -38,7 +38,8 @@
 
 ## Downloads
 
-Prerelease IPAs: **[GitHub Releases](https://github.com/decoder-dev/decoder-sec/releases)** (unsigned — resign before install).
+**Один файл:** [Releases](https://github.com/decoder-dev/decoder-sec/releases) → `DecoderSec.ipa`  
+ESign: импорт → подпись (Network Extension) → установка. См. [docs/ESIGN.md](./docs/ESIGN.md).
 
 ## Build
 

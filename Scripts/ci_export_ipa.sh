@@ -34,7 +34,7 @@ IPA_DIR="${IPA_DIR:-$ROOT/build/ipa}"
 SIGNING="${SIGNING:-unsigned}"
 EXPORT_OPTIONS="${EXPORT_OPTIONS:-$ROOT/Config/ExportOptions-ad-hoc.plist}"
 LITE="${LITE:-0}"
-BOTH="${BOTH:-1}"
+BOTH="${BOTH:-0}"
 
 APP_ENTITLEMENTS="$ROOT/DecoderSec/DecoderSec.entitlements"
 TUNNEL_ENTITLEMENTS="$ROOT/DecoderSecTunnel/DecoderSecTunnel.entitlements"

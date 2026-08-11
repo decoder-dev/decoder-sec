@@ -9,6 +9,16 @@ All notable changes to **decoder sec.** are documented here.
 - `ru` / `en` localization
 - Signed TestFlight builds
 
+## [0.1.0-beta.7] — 2026-08-11
+
+### Changed
+- **Один файл:** релиз публикует только полный `DecoderSec.ipa` (app + PacketTunnel) для ESign
+- Tunnel bundle ID читается из встроенного `.appex` — переживает ремап Bundle ID в ESign
+- `NSExtensionPrincipalClass` = `PacketTunnelProvider` (`@objc`) без имени модуля
+
+### Notes
+- ESign: один импорт → одна подпись (серт с Network Extension) → установка → конфиг → Connect
+
 ## [0.1.0-beta.6] — 2026-08-11
 
 ### Fixed

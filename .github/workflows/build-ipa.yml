@@ -49,7 +49,7 @@ jobs:
       CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
       SIGNING: ${{ github.event.inputs.signing || 'unsigned' }}
       LITE: '0'
-      BOTH: '1'
+      BOTH: '0'
       EVERYWHERE_CORE_MIN_VERSION: '2026.08.09'
 
     steps:
@@ -113,8 +113,8 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x Scripts/ci_export_ipa.sh Scripts/resign_ipa.sh build.sh
-          # One archive → full VPN IPA + Lite (no PacketTunnel)
-          BOTH=1 ./Scripts/ci_export_ipa.sh
+          # One full VPN IPA for ESign / one-file install (app + PacketTunnel)
+          BOTH=0 LITE=0 ./Scripts/ci_export_ipa.sh
           ls -lah build/ipa/
 
       - name: Rename IPA with version
@@ -131,18 +131,12 @@ jobs:
             VER="v0.0.0-dev.${SHA_SHORT}"
           fi
 
-          FULL_SRC="$(ls build/ipa/DecoderSec-unsigned.ipa 2>/dev/null || true)"
-          LITE_SRC="$(ls build/ipa/DecoderSec-lite-unsigned.ipa 2>/dev/null || true)"
-          # Fallback if only one file was produced
-          if [[ -z "$FULL_SRC" && -z "$LITE_SRC" ]]; then
-            FULL_SRC="$(ls build/ipa/*.ipa | head -n1)"
-          fi
-          if [[ -n "$FULL_SRC" ]]; then
-            mv "$FULL_SRC" "build/ipa/DecoderSec-${VER}-unsigned.ipa"
-          fi
-          if [[ -n "$LITE_SRC" ]]; then
-            mv "$LITE_SRC" "build/ipa/DecoderSec-${VER}-lite-unsigned.ipa"
-          fi
+          SRC="$(ls build/ipa/DecoderSec-unsigned.ipa build/ipa/*.ipa 2>/dev/null | head -n1)"
+          [[ -n "$SRC" ]] || { echo "no IPA produced"; exit 1; }
+          # Single user-facing name + versioned copy
+          cp "$SRC" "build/ipa/DecoderSec.ipa"
+          mv "$SRC" "build/ipa/DecoderSec-${VER}.ipa"
+          rm -f build/ipa/*lite* || true
 
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           PRE=false
@@ -156,7 +150,8 @@ jobs:
         with:
           name: DecoderSec-ipa-${{ steps.meta.outputs.version }}
           path: |
-            build/ipa/*.ipa
+            build/ipa/DecoderSec.ipa
+            build/ipa/DecoderSec-*.ipa
             build/*.xcarchive
           if-no-files-found: error
           retention-days: 30
@@ -165,29 +160,27 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: build/ipa/*.ipa
+          files: |
+            build/ipa/DecoderSec.ipa
+            build/ipa/DecoderSec-${{ steps.meta.outputs.version }}.ipa
           generate_release_notes: true
           prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
           name: decoder sec. ${{ steps.meta.outputs.version }}
           body: |
             ## decoder sec. `${{ steps.meta.outputs.version }}`
 
-            Two unsigned IPAs in this release (ad-hoc signed for install tools):
+            **Один файл:** [`DecoderSec.ipa`](https://github.com/decoder-dev/decoder-sec/releases/download/${{ steps.meta.outputs.version }}/DecoderSec.ipa)
 
-            1. **`DecoderSec-…-lite-unsigned.ipa`** — UI only (no Packet Tunnel). Resign once for `com.decodersec.app`.
-            2. **`DecoderSec-…-unsigned.ipa`** — full VPN. Resign with Network Extension for app + PacketTunnel (`Scripts/resign_ipa.sh`).
+            ### ESign (один раз)
+            1. Скачай `DecoderSec.ipa`
+            2. Открой в **ESign** → Импорт
+            3. Подпись сертификатом с **Network Extension / VPN** (платный)
+            4. Установи → открой → добавь конфиг → Connect
 
-            EverywhereCore is statically linked into the tunnel — it is **not** embedded as a Frameworks binary (that broke install on beta.5).
+            Внутри: приложение + PacketTunnel. Без App Groups. Bundle ID extension подхватывается после ремапа ESign автоматически.
 
-            ```bash
-            ./Scripts/resign_ipa.sh --ipa DecoderSec-…-unsigned.ipa \
-              --profile App.mobileprovision \
-              --identity "Apple Development: You (TEAMID)"
-            ```
-
-            - Bundle ID: `com.decodersec.app`
-            - Tunnel: `com.decodersec.app.PacketTunnel`
-            - Engines: Xray / sing-box / mihomo via EverywhereCore
+            - Default IDs: `com.decodersec.app` + `com.decodersec.app.PacketTunnel`
+            - Engines: Xray / sing-box / mihomo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -199,14 +192,11 @@ jobs:
           name: decoder sec. ${{ steps.meta.outputs.version }}
           prerelease: true
           generate_release_notes: true
-          files: build/ipa/*.ipa
+          files: |
+            build/ipa/DecoderSec.ipa
+            build/ipa/DecoderSec-${{ steps.meta.outputs.version }}.ipa
           body: |
-            ## decoder sec. `${{ steps.meta.outputs.version }}` (prerelease)
-
-            Built from `${{ github.sha }}` via workflow_dispatch.
-
-            Prefer **lite** IPA if you only need the UI. Full IPA needs Network Extension when resigning.
-            Use `Scripts/resign_ipa.sh` for one-command signing.
+            Один файл: `DecoderSec.ipa` — ESign → подпись с Network Extension → установка.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

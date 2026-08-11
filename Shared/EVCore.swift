@@ -9,9 +9,40 @@ import Foundation
 
 enum EVCore {
     enum Identifier {
-        static let bundle = BrandIdentity.bundleID
-        static let networkExtension = BrandIdentity.networkExtensionID
+        /// Host app bundle id (survives ESign remap).
+        static var bundle: String {
+            Bundle.main.bundleIdentifier ?? BrandIdentity.bundleID
+        }
+
+        /// Packet Tunnel provider id. Discovers the embedded `.appex` so ESign
+        /// can change both IDs in one sign and the app still finds the extension.
+        static var networkExtension: String {
+            if let embedded = embeddedTunnelBundleID() {
+                return embedded
+            }
+            let base = bundle
+            if base.contains("PacketTunnel") || base.lowercased().hasSuffix(".tunnel") || base.lowercased().hasSuffix(".ne") {
+                return base
+            }
+            return base + ".PacketTunnel"
+        }
+
         static let tunnelDescription = BrandIdentity.displayName
+
+        private static func embeddedTunnelBundleID() -> String? {
+            guard let plugins = Bundle.main.builtInPlugInsURL else { return nil }
+            guard let urls = try? FileManager.default.contentsOfDirectory(
+                at: plugins,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else { return nil }
+            for url in urls where url.pathExtension == "appex" {
+                if let id = Bundle(url: url)?.bundleIdentifier, !id.isEmpty {
+                    return id
+                }
+            }
+            return nil
+        }
     }
 
     static let defaultDNSServers = ["1.1.1.1", "8.8.8.8"]
