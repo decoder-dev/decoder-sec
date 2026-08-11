@@ -16,7 +16,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private var coreError: String?
     
     private var pathMonitor: NWPathMonitor?
-    private let pathMonitorQueue = DispatchQueue(label: "com.argsment.Everywhere.pathMonitor", qos: .utility)
+    private let pathMonitorQueue = DispatchQueue(label: "com.decodersec.app.pathMonitor", qos: .utility)
     private var pendingPathUpdate: DispatchWorkItem?
     private var latestPath: Network.NWPath?
     private static let pathDebounceInterval: DispatchTimeInterval = .milliseconds(1000)
@@ -31,7 +31,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         do {
             guard let idString = providerConfig["configID"] as? String,
                   let id = UUID(uuidString: idString) else {
-                throw NSError(domain: "Everywhere", code: -2, userInfo: [
+                throw NSError(domain: "DecoderSec", code: -2, userInfo: [
                     NSLocalizedDescriptionKey: "missing configID in providerConfiguration"
                 ])
             }
@@ -57,7 +57,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             let fd = TunnelFD.lookup(for: self.packetFlow)
             if fd < 0 {
                 completionHandler(NSError(
-                    domain: "Everywhere",
+                    domain: "DecoderSec",
                     code: -1,
                     userInfo: [NSLocalizedDescriptionKey: "could not obtain TUN file descriptor"]
                 ))
@@ -67,7 +67,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             let resPath = EVCore.resourcesURL(for: coreType).path
             var resErr: NSError?
             if !EvcoreSetResourcesPath(resPath, &resErr), let resErr {
-                NSLog("Everywhere: SetResourcesPath failed: \(resErr)")
+                NSLog("DecoderSec: SetResourcesPath failed: \(resErr)")
             }
 
             var coreErr: NSError?
@@ -98,7 +98,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         DispatchQueue.global(qos: .userInitiated).async {
             var err: NSError?
             if !EvcoreStopAll(&err), let err {
-                NSLog("Everywhere: StopAll failed: \(err)")
+                NSLog("DecoderSec: StopAll failed: \(err)")
             }
             complete()
         }
@@ -209,7 +209,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
         request.fetchLimit = 1
         guard let row = try context.fetch(request).first else {
-            throw NSError(domain: "Everywhere", code: -3, userInfo: [
+            throw NSError(domain: "DecoderSec", code: -3, userInfo: [
                 NSLocalizedDescriptionKey: "active configuration not found in store"
             ])
         }

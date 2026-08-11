@@ -431,7 +431,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Everywhere/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Everywhere;
+				INFOPLIST_KEY_CFBundleDisplayName = "decoder sec.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -445,7 +445,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.argsment.Everywhere;
+				PRODUCT_BUNDLE_IDENTIFIER = com.decodersec.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -469,7 +469,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Everywhere/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Everywhere;
+				INFOPLIST_KEY_CFBundleDisplayName = "decoder sec.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -483,7 +483,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.argsment.Everywhere;
+				PRODUCT_BUNDLE_IDENTIFIER = com.decodersec.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -504,7 +504,7 @@
 				DEVELOPMENT_TEAM = C7AS5D38Q8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EverywhereNE/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = EverywhereNE;
+				INFOPLIST_KEY_CFBundleDisplayName = "decoder sec. Tunnel";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -513,7 +513,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.argsment.Everywhere.EverywhereNE;
+				PRODUCT_BUNDLE_IDENTIFIER = com.decodersec.app.PacketTunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -534,7 +534,7 @@
 				DEVELOPMENT_TEAM = C7AS5D38Q8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EverywhereNE/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = EverywhereNE;
+				INFOPLIST_KEY_CFBundleDisplayName = "decoder sec. Tunnel";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -543,7 +543,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.argsment.Everywhere.EverywhereNE;
+				PRODUCT_BUNDLE_IDENTIFIER = com.decodersec.app.PacketTunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

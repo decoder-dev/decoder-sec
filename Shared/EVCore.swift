@@ -11,14 +11,14 @@ final class EVCore {
     // MARK: - Identifiers
 
     enum Identifier {
-        /// Bundle identifier prefix for the Everywhere app family.
-        static let bundle = "com.argsment.Everywhere"
+        /// Bundle identifier prefix for the decoder sec. app family.
+        static let bundle = BrandIdentity.bundleID
         /// App Group suite shared between the app and Network Extension.
-        static let appGroupSuite = "group.\(bundle)"
+        static let appGroupSuite = BrandIdentity.appGroup
         /// Bundle identifier of the packet tunnel Network Extension.
-        static let networkExtension = "\(bundle).EverywhereNE"
+        static let networkExtension = BrandIdentity.networkExtensionID
         /// Description shown for the VPN profile in iOS Settings.
-        static let tunnelDescription = "Everywhere"
+        static let tunnelDescription = BrandIdentity.displayName
     }
 
     /// Fallback DNS servers used when the user hasn't customized them.

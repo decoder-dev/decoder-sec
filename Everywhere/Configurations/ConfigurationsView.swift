@@ -261,7 +261,7 @@ struct ConfigurationsView: View {
 
     private func fetchConfig(from url: URL) async throws -> String {
         var request = URLRequest(url: url)
-        request.setValue("Everywhere/1.0 Clash/1.11.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("decodersec/1.0 Clash/1.11.0", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw NSError(

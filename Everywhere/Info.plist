@@ -18,9 +18,11 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.argsment.Everywhere.deeplink</string>
+			<string>com.decodersec.app.deeplink</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>decodersec</string>
+				<string>decoder</string>
 				<string>everywhere</string>
 			</array>
 		</dict>
@@ -28,7 +30,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>com.argsment.Everywhere.sharelinks</string>
+			<string>com.decodersec.app.sharelinks</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>vless</string>
@@ -44,5 +46,7 @@
 	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 </dict>
 </plist>

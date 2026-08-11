@@ -114,7 +114,7 @@ final class TunnelManager: ObservableObject {
         let m = manager ?? NETunnelProviderManager()
         let proto = (m.protocolConfiguration as? NETunnelProviderProtocol) ?? NETunnelProviderProtocol()
         proto.providerBundleIdentifier = EVCore.Identifier.networkExtension
-        proto.serverAddress = "Everywhere"
+        proto.serverAddress = BrandIdentity.displayName
         proto.providerConfiguration = [
             "coreType": coreType.rawValue,
             "configID": configID.uuidString,

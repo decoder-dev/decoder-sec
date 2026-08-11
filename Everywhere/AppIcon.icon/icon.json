@@ -1,56 +1,28 @@
 {
   "fill" : {
-    "automatic-gradient" : "srgb:1.00000,1.00000,1.00000,1.00000"
+    "solid" : "display-p3:0.00000,0.00000,0.00000,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "fill" : {
-            "automatic-gradient" : "srgb:0.00000,0.15159,0.54559,1.00000"
-          },
-          "image-name" : "primary.svg",
-          "name" : "primary",
+          "image-name" : "decoder-mark.png",
+          "name" : "mark",
           "position" : {
             "scale" : 1,
             "translation-in-points" : [
-              37,
-              -37.000000070626584
-            ]
-          }
-        },
-        {
-          "blend-mode" : "normal",
-          "fill-specializations" : [
-            {
-              "value" : {
-                "automatic-gradient" : "srgb:0.00000,0.50000,1.00000,1.00000"
-              }
-            },
-            {
-              "appearance" : "dark",
-              "value" : {
-                "automatic-gradient" : "srgb:0.00000,0.25209,1.00000,1.00000"
-              }
-            }
-          ],
-          "image-name" : "secondary.svg",
-          "name" : "secondary",
-          "position" : {
-            "scale" : 1,
-            "translation-in-points" : [
-              -78,
-              78
+              0,
+              0
             ]
           }
         }
       ],
       "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
+        "kind" : "layer-color",
+        "opacity" : 0.45
       },
       "translucency" : {
-        "enabled" : true,
+        "enabled" : false,
         "value" : 0.5
       }
     }

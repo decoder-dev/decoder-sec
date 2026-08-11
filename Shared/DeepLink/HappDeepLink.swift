@@ -36,7 +36,7 @@ enum RoutingPayload: Equatable {
 
 enum HappDeepLink {
     static let primaryScheme = "happ"
-    static let aliasSchemes: Set<String> = ["happ", "everywhere"]
+    static let aliasSchemes: Set<String> = ["happ", "everywhere", "decodersec", "decoder"]
     static let shareSchemes: Set<String> = [
         "vless", "vmess", "trojan", "ss", "ssr",
         "socks", "socks5", "hysteria2", "hy2", "wireguard", "wg"

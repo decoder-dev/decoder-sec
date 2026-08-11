@@ -15,7 +15,7 @@ enum SubscriptionImporter {
         var embeddedRoutingDeepLink: String?
     }
 
-    static func fetch(from url: URL, userAgent: String = "Happ/1.0 Everywhere/1.0") async throws -> Result {
+    static func fetch(from url: URL, userAgent: String = "Happ/1.0 decodersec/1.0") async throws -> Result {
         var request = URLRequest(url: url)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("*/*", forHTTPHeaderField: "Accept")

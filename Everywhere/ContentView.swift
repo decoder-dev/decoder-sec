@@ -15,21 +15,20 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
+            Brand.Color.void.ignoresSafeArea()
+
             if tunnel.coreRunning && !minimized {
                 RunningRootView()
             } else {
                 TabView {
                     HomeView()
-                        .tabItem { Label("Home", systemImage: "house.fill") }
+                        .tabItem { Label(Brand.shortName, systemImage: "shield.lefthalf.filled") }
 
                     SettingsView()
-                        .tabItem { Label("Settings", systemImage: "gearshape") }
+                        .tabItem { Label("Settings", systemImage: "slider.horizontal.3") }
                 }
             }
 
-            // Overlay the menu button for the whole tunnel session so
-            // it follows the user from the dashboard back to the home
-            // tabs without losing its drag-positioned location.
             if tunnel.coreRunning {
                 FloatingMenuButton(
                     isMinimized: minimized,
@@ -38,6 +37,7 @@ struct ContentView: View {
                 )
             }
         }
+        .brandTheme()
         .animation(.default, value: tunnel.coreRunning)
         .animation(.default, value: minimized)
         .onChange(of: tunnel.coreRunning) { running in
@@ -46,13 +46,15 @@ struct ContentView: View {
         .overlay(alignment: .top) {
             if deepLinks.isBusy {
                 ProgressView("Handling deep link…")
+                    .tint(Brand.Color.neon)
                     .padding(10)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(Brand.Color.surface.opacity(0.92), in: Capsule())
+                    .overlay(Capsule().stroke(Brand.Color.hairline, lineWidth: 1))
                     .padding(.top, 8)
             }
         }
         .alert(
-            "Deep link",
+            Brand.displayName,
             isPresented: Binding(
                 get: { deepLinks.banner != nil },
                 set: { if !$0 { deepLinks.banner = nil } }
@@ -85,13 +87,28 @@ private struct RunningRootView: View {
     @ObservedObject private var appState = AppState.shared
 
     var body: some View {
-        if appState.useZashboardEnabled && store.selectedCore != .xray {
-            DashboardView()
-        } else {
-            Text("\(store.selectedCore.displayName) is running")
-                .font(.title2)
-                .foregroundStyle(.secondary)
+        ZStack {
+            Brand.Color.void.ignoresSafeArea()
+            if appState.useZashboardEnabled && store.selectedCore != .xray {
+                DashboardView()
+            } else {
+                VStack(spacing: 16) {
+                    Image("BrandLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 72, height: 72)
+                        .neonGlow(radius: 18, opacity: 0.65)
+
+                    Text(Brand.displayName)
+                        .font(Brand.Font.display(22))
+                        .foregroundStyle(Brand.Color.primaryText)
+
+                    Text("\(store.selectedCore.displayName) is running")
+                        .font(Brand.Font.mono(13))
+                        .foregroundStyle(Brand.Color.secondaryText)
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 }

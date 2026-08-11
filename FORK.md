@@ -21,7 +21,7 @@ Upstream EverywhereCore already auto-releases when Xray/sing-box/mihomo move. Th
 4. **Share-link parsers** — `vless://`, `vmess://`, `trojan://`, `ss://`, `hy2://` → Xray/sing-box outbound (reuse docs formats from INCY as a compatibility reference).
 5. **Deep links** — **Happ-compatible `happ://`** (see [DEEPLINKS.md](./DEEPLINKS.md)): `add`, `routing/onadd`, share-links, connect/disconnect.
 6. **NE memory profile** — iOS Network Extension ~50 MB; add “lite” routing / geo trimming toggle.
-7. **Branding pack** — rename display name, icons, `PRODUCT_BUNDLE_IDENTIFIER`, app group (requires your Apple Team + NE entitlements).
+7. **Branding pack** — **done**: decoder sec. OLED black + neon green, logo icon, `com.decodersec.app` / App Group.
 8. **Xray-only slim build** (optional later) — drop mihomo/sing-box from EverywhereCore to shrink binary and attack surface.
 9. **Locales** — `ru` / `en` strings for mass-market UX.
 10. **TestFlight lane** — once signing secrets exist, add `method: app-store` export + upload.

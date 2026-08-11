@@ -37,7 +37,7 @@ happ://connect
 vless://uuid@host:443?encryption=none&security=reality&pbk=…&sid=…&sni=…#Node
 ```
 
-Alias: every `happ://…` form also works as `everywhere://…`.
+Alias: every `happ://…` form also works as `everywhere://…`, `decodersec://…`, and `decoder://…`.
 
 ## Code map
 
