@@ -71,8 +71,9 @@ an Xcode UI edit reasserts them.
 
 The Network Extension is shipped as an `.appex` bundled in
 `DecoderSec.app/PlugIns/`. The provider is loaded by the system's
-`nesessionmanager`, talks to the app over the App Group container
-`group.com.decodersec.app`, and owns the `utun` device. The
+`nesessionmanager`. The app passes the full config into the extension via
+`NETunnelProviderProtocol.providerConfiguration` (and start options) —
+no App Group. The extension owns the `utun` device. The
 extension links against the same `EverywhereCore` SwiftPM product as
 the app and resolves the framework at runtime from the host app's
 `Frameworks/` directory — only the app target embeds, not the extension.

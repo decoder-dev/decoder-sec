@@ -12,8 +12,6 @@ struct DecoderSecApp: App {
     @ObservedObject private var deepLinks = DeepLinkCenter.shared
 
     init() {
-        // Touch storage early so fallback flags are set before first view.
-        _ = EVCore.containerURL
         _ = PersistenceController.shared
     }
 

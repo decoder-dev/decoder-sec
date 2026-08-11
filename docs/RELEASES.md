@@ -12,8 +12,8 @@
 Pushing a `v*` tag runs **Build IPA** and publishes a GitHub Release (prerelease if the tag contains `alpha` / `beta` / `rc` / `dev` / `pre`).
 
 ```bash
-git tag -a v0.1.0-beta.2 -m "decoder sec. v0.1.0-beta.2"
-git push origin v0.1.0-beta.2
+git tag -a v0.1.0-beta.3 -m "decoder sec. v0.1.0-beta.3"
+git push origin v0.1.0-beta.3
 ```
 
 ## Manual prerelease
@@ -29,4 +29,6 @@ Unsigned IPA must be resigned (Sideloadly / AltStore / Apple cert) with:
 
 - App ID `com.decodersec.app`
 - Extension `com.decodersec.app.PacketTunnel`
-- App Group `group.com.decodersec.app`
+- Network Extension (packet tunnel)
+
+No App Group required.

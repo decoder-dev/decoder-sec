@@ -10,6 +10,17 @@ All notable changes to **decoder sec.** are documented here.
 - `ru` / `en` localization
 - Signed TestFlight builds
 
+## [0.1.0-beta.3] — 2026-08-11
+
+### Changed
+- Removed App Groups entirely
+- Configs live only in the app (local Core Data)
+- Tunnel starts with full `configContent` via `providerConfiguration` + start options
+- Packet Tunnel no longer opens Core Data
+
+### Notes
+- Resign unsigned IPA with Network Extension only — App Group not needed
+
 ## [0.1.0-beta.2] — 2026-08-11
 
 ### Fixed
@@ -29,5 +40,5 @@ First public prerelease of the decoder-sec product line.
 - Docs: `BRAND.md`, `DEEPLINKS.md`, `FORK.md`
 
 ### Notes
-- IPA is **unsigned** — resign with a team that has Network Extension + App Group `group.com.decodersec.app`
+- IPA is **unsigned** — resign with a team that has Network Extension for `com.decodersec.app` / `PacketTunnel`
 - Upstream lineage: Everywhere + EverywhereCore (GPLv3)

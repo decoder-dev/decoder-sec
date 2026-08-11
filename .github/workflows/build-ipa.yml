@@ -159,7 +159,7 @@ jobs:
           body: |
             ## decoder sec. `${{ steps.meta.outputs.version }}`
 
-            Unsigned IPA — resign before install (Network Extension + App Group `group.com.decodersec.app`).
+            Unsigned IPA — resign before install (Network Extension packet-tunnel; no App Group).
 
             - Bundle ID: `com.decodersec.app`
             - Tunnel: `com.decodersec.app.PacketTunnel`

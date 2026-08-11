@@ -1,8 +1,9 @@
 //
 //  PersistenceController.swift
-//  DecoderSec
+//  decoder sec.
 //
-//  Created by NodePassProject on 5/2/26.
+//  Local Core Data only — no App Groups.
+//  The Network Extension never opens this store; configs are passed at tunnel start.
 //
 
 import CoreData
@@ -12,129 +13,54 @@ final class PersistenceController {
     static let shared = PersistenceController()
 
     let container: NSPersistentContainer
+    let isStoreLoaded: Bool
+    let storeLoadError: Error?
 
-    private init() {
-        let model = Self.makeModel()
-        container = NSPersistentContainer(name: "DecoderSec", managedObjectModel: model)
+    var viewContext: NSManagedObjectContext { container.viewContext }
 
-        // Prefer App Group so the Network Extension can open the same
-        // SQLite. If the group isn't entitled (unsigned sideload), fall
-        // back to Application Support — app UI still works.
-        let storeURL = EVCore.containerURL.appendingPathComponent("DecoderSec.sqlite")
-        Self.migrateLegacyStoreIfNeeded(to: storeURL, model: model)
-        let description = NSPersistentStoreDescription(url: storeURL)
-        description.shouldMigrateStoreAutomatically = true
-        description.shouldInferMappingModelAutomatically = true
-        container.persistentStoreDescriptions = [description]
+    init(inMemory: Bool = false) {
+        container = NSPersistentContainer(name: "Model")
+
+        if inMemory {
+            container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
+        } else {
+            let storeURL = EVCore.containerURL.appendingPathComponent("Model.sqlite")
+            let description = NSPersistentStoreDescription(url: storeURL)
+            description.shouldMigrateStoreAutomatically = true
+            description.shouldInferMappingModelAutomatically = true
+            container.persistentStoreDescriptions = [description]
+        }
 
         var loadError: Error?
         container.loadPersistentStores { _, error in
-            loadError = error
-        }
-        if let loadError {
-            NSLog("DecoderSec: Core Data load failed (%@) — retrying in sandbox", loadError.localizedDescription)
-            let fallback = NSPersistentContainer.defaultDirectoryURL()
-                .appendingPathComponent("DecoderSec-fallback.sqlite")
-            container.persistentStoreDescriptions = [NSPersistentStoreDescription(url: fallback)]
-            container.loadPersistentStores { _, error in
-                if let error {
-                    NSLog("DecoderSec: Core Data fallback also failed: %@", error.localizedDescription)
-                }
+            if let error {
+                loadError = error
+                NSLog("[Persistence] store load failed: \(error.localizedDescription)")
             }
         }
+        storeLoadError = loadError
+        isStoreLoaded = loadError == nil
+
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
     }
 
-    // Pre-1.1(10) builds wrote the SQLite to NSPersistentContainer's
-    // default directory inside the app sandbox. The NE can't reach
-    // that path, so 1.1(10) moved the store into the App Group
-    // container — which silently left every existing user looking
-    // at an empty database. Copy the legacy file over on first
-    // launch. If a 1.1(10) launch already created an empty store
-    // at the new path, replace it.
-    private static func migrateLegacyStoreIfNeeded(to newURL: URL, model: NSManagedObjectModel) {
-        let fm = FileManager.default
-        let candidates = [
-            // Pre-rename Everywhere store in app sandbox
-            NSPersistentContainer.defaultDirectoryURL().appendingPathComponent("Everywhere.sqlite"),
-            // Pre-App-Group DecoderSec sandbox path
-            NSPersistentContainer.defaultDirectoryURL().appendingPathComponent("DecoderSec.sqlite"),
-            // App Group Everywhere store (if a prior build already moved it)
-            EVCore.containerURL.appendingPathComponent("Everywhere.sqlite"),
-        ]
+    func newBackgroundContext() -> NSManagedObjectContext {
+        let context = container.newBackgroundContext()
+        context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        return context
+    }
 
-        guard let legacyURL = candidates.first(where: { fm.fileExists(atPath: $0.path) }) else { return }
-        // Don't migrate onto ourselves.
-        guard legacyURL.standardizedFileURL != newURL.standardizedFileURL else { return }
-
-        if fm.fileExists(atPath: newURL.path) {
-            guard isStoreEmpty(at: newURL, model: model) else { return }
-            removeStoreFiles(at: newURL, fm: fm)
+    @discardableResult
+    func save(_ context: NSManagedObjectContext? = nil) -> Bool {
+        let ctx = context ?? viewContext
+        guard ctx.hasChanges else { return true }
+        do {
+            try ctx.save()
+            return true
+        } catch {
+            NSLog("[Persistence] save failed: \(error.localizedDescription)")
+            return false
         }
-
-        copyStoreFiles(from: legacyURL, to: newURL, fm: fm)
-    }
-
-    private static func isStoreEmpty(at url: URL, model: NSManagedObjectModel) -> Bool {
-        let coordinator = NSPersistentStoreCoordinator(managedObjectModel: model)
-        guard let store = try? coordinator.addPersistentStore(
-            ofType: NSSQLiteStoreType, configurationName: nil, at: url, options: nil
-        ) else { return false }
-        defer { try? coordinator.remove(store) }
-
-        let ctx = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
-        ctx.persistentStoreCoordinator = coordinator
-        let request = NSFetchRequest<NSFetchRequestResult>(entityName: "Configuration")
-        request.resultType = .countResultType
-        return ((try? ctx.count(for: request)) ?? 1) == 0
-    }
-
-    private static func storeFileURLs(base: URL) -> [URL] {
-        [base,
-         URL(fileURLWithPath: base.path + "-wal"),
-         URL(fileURLWithPath: base.path + "-shm")]
-    }
-
-    private static func copyStoreFiles(from src: URL, to dst: URL, fm: FileManager) {
-        for (s, d) in zip(storeFileURLs(base: src), storeFileURLs(base: dst))
-            where fm.fileExists(atPath: s.path) {
-            try? fm.copyItem(at: s, to: d)
-        }
-    }
-
-    private static func removeStoreFiles(at url: URL, fm: FileManager) {
-        for u in storeFileURLs(base: url) where fm.fileExists(atPath: u.path) {
-            try? fm.removeItem(at: u)
-        }
-    }
-
-    private static func makeModel() -> NSManagedObjectModel {
-        let entity = NSEntityDescription()
-        entity.name = "Configuration"
-        entity.managedObjectClassName = NSStringFromClass(Configuration.self)
-
-        func attr(_ name: String, _ type: NSAttributeType, optional: Bool = false, defaultValue: Any? = nil) -> NSAttributeDescription {
-            let a = NSAttributeDescription()
-            a.name = name
-            a.attributeType = type
-            a.isOptional = optional
-            if let defaultValue { a.defaultValue = defaultValue }
-            return a
-        }
-
-        entity.properties = [
-            attr("id", .UUIDAttributeType),
-            attr("name", .stringAttributeType, defaultValue: ""),
-            attr("type", .stringAttributeType, defaultValue: CoreType.xray.rawValue),
-            attr("content", .stringAttributeType, defaultValue: ""),
-            attr("createdAt", .dateAttributeType),
-            attr("updatedAt", .dateAttributeType),
-            attr("sourceURL", .stringAttributeType, optional: true),
-        ]
-
-        let model = NSManagedObjectModel()
-        model.entities = [entity]
-        return model
     }
 }

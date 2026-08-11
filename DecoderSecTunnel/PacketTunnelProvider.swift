@@ -2,44 +2,55 @@
 //  PacketTunnelProvider.swift
 //  DecoderSec
 //
-//  Created by NodePassProject on 5/2/26.
+//  Receives the full config from the app via providerConfiguration / start options.
+//  No App Groups, no Core Data.
 //
 
-import CoreData
 import EverywhereCore
 import Network
 import NetworkExtension
 
 final class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let tunnelMTU = 1500
-    
+
     private var coreError: String?
-    
+
     private var pathMonitor: NWPathMonitor?
     private let pathMonitorQueue = DispatchQueue(label: "com.decodersec.app.pathMonitor", qos: .utility)
     private var pendingPathUpdate: DispatchWorkItem?
     private var latestPath: Network.NWPath?
     private static let pathDebounceInterval: DispatchTimeInterval = .milliseconds(1000)
 
-    override func startTunnel(options _: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+    override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         let providerConfig = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration ?? [:]
-        let coreTypeRaw = (providerConfig["coreType"] as? String) ?? CoreType.xray.rawValue
+
+        let coreTypeRaw = (options?["coreType"] as? String)
+            ?? (providerConfig["coreType"] as? String)
+            ?? CoreType.xray.rawValue
         let coreType = CoreType(rawValue: coreTypeRaw) ?? .xray
-        let dnsServers = Self.cleanDNS(providerConfig["dnsServers"] as? [String])
-        
+
+        let dnsServers = Self.cleanDNS(
+            (options?["dnsServers"] as? [String]) ?? (providerConfig["dnsServers"] as? [String])
+        )
+
+        let useZashboard = (options?["useZashboard"] as? NSNumber)?.boolValue
+            ?? (providerConfig["useZashboard"] as? Bool)
+            ?? true
+
+        let rawContent = (options?["configContent"] as? String)
+            ?? (providerConfig["configContent"] as? String)
+
         let configContent: String
         do {
-            guard let idString = providerConfig["configID"] as? String,
-                  let id = UUID(uuidString: idString) else {
+            guard let rawContent, !rawContent.isEmpty else {
                 throw NSError(domain: "DecoderSec", code: -2, userInfo: [
-                    NSLocalizedDescriptionKey: "missing configID in providerConfiguration"
+                    NSLocalizedDescriptionKey: "missing configContent — start the tunnel from the app once"
                 ])
             }
-            let raw = try Self.fetchConfigContent(id: id)
             configContent = try ConfigNormalizer.normalize(
-                raw,
+                rawContent,
                 for: coreType,
-                useZashboard: EVCore.getUseZashboard()
+                useZashboard: useZashboard
             )
         } catch {
             completionHandler(error)
@@ -63,7 +74,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 ))
                 return
             }
-            
+
             let resPath = EVCore.resourcesURL(for: coreType).path
             var resErr: NSError?
             if !EvcoreSetResourcesPath(resPath, &resErr), let resErr {
@@ -78,14 +89,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             }
 
             self.startPathMonitor()
-
             completionHandler(nil)
         }
     }
 
     override func stopTunnel(with _: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         stopPathMonitor()
-        
+
         let lock = NSLock()
         var didComplete = false
         let complete = {
@@ -107,7 +117,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             complete()
         }
     }
-    
+
     override func sleep(completionHandler: @escaping () -> Void) {
         var err: NSError?
         _ = EvcoreSuspend(&err)
@@ -143,7 +153,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         ipv4.includedRoutes = [NEIPv4Route.default()]
         ipv4.excludedRoutes = []
         settings.ipv4Settings = ipv4
-        
+
         let ipv6 = NEIPv6Settings(addresses: ["fd00::1"], networkPrefixLengths: [126])
         ipv6.includedRoutes = [NEIPv6Route.default()]
         ipv6.excludedRoutes = []
@@ -175,7 +185,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         pathMonitor?.cancel()
         pathMonitor = nil
     }
-    
+
     private func schedulePathUpdate(_ path: Network.NWPath) {
         latestPath = path
         pendingPathUpdate?.cancel()
@@ -190,7 +200,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private func handlePathUpdate(_ path: Network.NWPath) {
         var err: NSError?
         guard path.status == .satisfied, let iface = path.availableInterfaces.first else {
-            // No usable path
             _ = EvcoreUpdateDefaultInterface("", -1, false, false, &err)
             return
         }
@@ -201,18 +210,5 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             path.isConstrained,
             &err
         )
-    }
-
-    private static func fetchConfigContent(id: UUID) throws -> String {
-        let context = PersistenceController.shared.container.viewContext
-        let request = NSFetchRequest<Configuration>(entityName: "Configuration")
-        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-        request.fetchLimit = 1
-        guard let row = try context.fetch(request).first else {
-            throw NSError(domain: "DecoderSec", code: -3, userInfo: [
-                NSLocalizedDescriptionKey: "active configuration not found in store"
-            ])
-        }
-        return row.content
     }
 }

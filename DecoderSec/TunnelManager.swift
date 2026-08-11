@@ -2,7 +2,8 @@
 //  TunnelManager.swift
 //  DecoderSec
 //
-//  Created by NodePassProject on 5/2/26.
+//  Starts the Network Extension with the full config body.
+//  No App Groups — NE never reads Core Data.
 //
 
 import Combine
@@ -19,9 +20,9 @@ final class TunnelManager: ObservableObject {
     @Published private(set) var pendingReconnect: Bool = false
     private var manager: NETunnelProviderManager?
     private var statusObserver: AnyCancellable?
-    
+
     private var didConnect: Bool = false
-    
+
     private var transitionTimeoutTask: Task<Void, Never>?
     private static let transitionTimeoutNanos: UInt64 = 30 * 1_000_000_000
 
@@ -57,11 +58,15 @@ final class TunnelManager: ObservableObject {
         do {
             if on {
                 didConnect = false
-                let m = try await ensureManager(
-                    coreType: configuration.coreType,
-                    configID: configuration.id
-                )
-                try m.connection.startVPNTunnel()
+                let m = try await ensureManager(configuration: configuration)
+                let options: [String: NSObject] = [
+                    "configContent": configuration.content as NSString,
+                    "configID": configuration.id.uuidString as NSString,
+                    "coreType": configuration.coreType.rawValue as NSString,
+                    "dnsServers": AppState.shared.dnsServers as NSArray,
+                    "useZashboard": NSNumber(value: AppState.shared.useZashboardEnabled),
+                ]
+                try m.connection.startVPNTunnel(options: options)
             } else {
                 pendingReconnect = false
                 try await disableTunnel()
@@ -71,7 +76,7 @@ final class TunnelManager: ObservableObject {
             lastError = error.localizedDescription
         }
     }
-    
+
     func reconnect() async {
         guard manager != nil, status.isActive else { return }
         do {
@@ -82,15 +87,15 @@ final class TunnelManager: ObservableObject {
             lastError = error.localizedDescription
         }
     }
-    
+
     func applyAlwaysOn(_ enabled: Bool) async {
         if status.isActive {
             await reconnect()
             return
         }
-        
+
         guard !enabled else { return }
-        
+
         do {
             let managers = try await NETunnelProviderManager.loadAllFromPreferences()
             guard let m = managers.first(where: {
@@ -110,15 +115,18 @@ final class TunnelManager: ObservableObject {
         lastError = nil
     }
 
-    private func ensureManager(coreType: CoreType, configID: UUID) async throws -> NETunnelProviderManager {
+    private func ensureManager(configuration: Configuration) async throws -> NETunnelProviderManager {
         let m = manager ?? NETunnelProviderManager()
         let proto = (m.protocolConfiguration as? NETunnelProviderProtocol) ?? NETunnelProviderProtocol()
         proto.providerBundleIdentifier = EVCore.Identifier.networkExtension
         proto.serverAddress = BrandIdentity.displayName
+        // Full payload so NE (and on-demand restarts) need no shared store.
         proto.providerConfiguration = [
-            "coreType": coreType.rawValue,
-            "configID": configID.uuidString,
-            "dnsServers": AppState.shared.dnsServers
+            "configContent": configuration.content,
+            "configID": configuration.id.uuidString,
+            "coreType": configuration.coreType.rawValue,
+            "dnsServers": AppState.shared.dnsServers,
+            "useZashboard": AppState.shared.useZashboardEnabled,
         ]
         proto.includeAllNetworks = AppState.shared.tunnelIncludeAllNetworks
         proto.excludeLocalNetworks = !AppState.shared.tunnelIncludeLocalNetworks

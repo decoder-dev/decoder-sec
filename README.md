@@ -33,7 +33,6 @@
 | Targets | `DecoderSec` · `DecoderSecTunnel` |
 | Bundle ID | `com.decodersec.app` |
 | Packet Tunnel | `com.decodersec.app.PacketTunnel` |
-| App Group | `group.com.decodersec.app` |
 
 [BRAND.md](./BRAND.md) · [DEEPLINKS.md](./DEEPLINKS.md) · [FORK.md](./FORK.md) · [CHANGELOG.md](./CHANGELOG.md) · [Releases](./docs/RELEASES.md)
 
@@ -54,7 +53,7 @@ open DecoderSec.xcodeproj
 ./Scripts/ci_export_ipa.sh   # unsigned IPA → build/ipa/
 ```
 
-Requires Xcode 16+ and an Apple Team with Network Extension + App Group for the IDs above.
+Requires Xcode 16+ and an Apple Team with Network Extension for the IDs above. No App Group.
 
 ## License
 

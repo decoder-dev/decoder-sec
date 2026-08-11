@@ -9,7 +9,6 @@
 | Tunnel target | `DecoderSecTunnel` |
 | Bundle ID | `com.decodersec.app` |
 | Network Extension | `com.decodersec.app.PacketTunnel` |
-| App Group | `group.com.decodersec.app` |
 | Accent | neon emerald `#00FF6A` |
 | Background | true black `#000000` |
 
@@ -19,4 +18,4 @@ App Store / VPN profile short blurb:
 
 > decoder sec. — private tunnels on Xray, sing-box, and mihomo. Import Happ links, bring your own config, stay in control.
 
-Register App Group + Network Extension for these IDs in Apple Developer before device installs.
+No App Groups. Configs stay in the app; the tunnel receives the full payload at start. Register Network Extension capability for the IDs above before device installs.
