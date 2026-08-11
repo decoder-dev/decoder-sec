@@ -171,30 +171,29 @@ pack_ipa() {
     rm -rf "$app_copy/PlugIns"
   fi
 
-  # Sideload-friendly IPA: no resource forks / Finder metadata.
-  # ditto -ck produces a clean zip that Sideloadly / 3uTools / Windows unpack reliably.
+  # Sideload-friendly IPA: strip macOS extras (-X). Always keep Payload/ as zip root.
   local out="$IPA_DIR/$name"
   rm -f "$out"
+  if [[ ! -f "$app_copy/Info.plist" ]]; then
+    echo "error: staged app missing Info.plist before zip" >&2
+    rm -rf "$stage"
+    exit 1
+  fi
   (
     cd "$stage"
-    if command -v ditto >/dev/null 2>&1; then
-      # Clean zip without resource forks — Sideloadly / 3uTools / Windows-friendly.
-      ditto -ck --norsrc --noextattr --noacl Payload "$out"
-    else
-      zip -r -X -9 "$out" Payload
-    fi
+    # -X strips uid/gid/xattr; -9 deflates large binaries. Do NOT use ditto here:
+    # ditto -ck without keepParent can omit the Payload/ root and break Sideloadly.
+    zip -r -X -9 "$out" Payload
   )
 
   # Validate: must unpack cleanly and contain Payload/*.app/Info.plist
   local check
   check="$(mktemp -d)"
-  if command -v ditto >/dev/null 2>&1; then
-    ditto -xk "$out" "$check"
-  else
-    unzip -q "$out" -d "$check"
-  fi
+  unzip -q "$out" -d "$check"
   if [[ ! -f "$check/Payload/$app_name/Info.plist" ]]; then
     echo "error: packed IPA missing Payload/$app_name/Info.plist" >&2
+    echo "archive top-level:" >&2
+    unzip -l "$out" | head -30 >&2
     rm -rf "$stage" "$check"
     exit 1
   fi

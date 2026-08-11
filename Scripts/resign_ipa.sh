@@ -355,12 +355,16 @@ if command -v xattr >/dev/null 2>&1; then
 fi
 (
   cd "$WORK/unpacked"
-  if command -v ditto >/dev/null 2>&1; then
-    ditto -ck --norsrc --noextattr --noacl Payload "$OUTPUT"
-  else
-    zip -r -X -9 "$OUTPUT" Payload
-  fi
+  zip -r -X -9 "$OUTPUT" Payload
 )
 unzip -t "$OUTPUT" >/dev/null
+if [[ ! -f "$WORK/unpacked/Payload/$(basename "$APP_PATH")/Info.plist" ]]; then
+  die "internal error: Payload app Info.plist missing before package"
+fi
+# Confirm packed structure
+VERIFY="$(mktemp -d)"
+unzip -q "$OUTPUT" -d "$VERIFY"
+[[ -f "$VERIFY/Payload/$(basename "$APP_PATH")/Info.plist" ]] || die "resigned IPA missing Payload app Info.plist"
+rm -rf "$VERIFY"
 
 echo "OK: resigned IPA: $OUTPUT"
