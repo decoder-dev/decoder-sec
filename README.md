@@ -1,31 +1,40 @@
-# decoder sec.
+<p align="center">
+  <img src="docs/logo.png" alt="decoder sec." width="160" height="160" />
+</p>
 
-Premium iOS proxy client — **decoder-sec**.
+<h1 align="center">decoder sec.</h1>
 
-Built for our own product direction on top of the open Everywhere / Xray stack (GPLv3).
+<p align="center">
+  <strong>Premium iOS proxy client</strong><br/>
+  Xray · sing-box · mihomo — your configs, your rules.
+</p>
 
-[![Build IPA](https://github.com/decoder-dev/decoder-sec/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/decoder-dev/decoder-sec/actions/workflows/build-ipa.yml)
+<p align="center">
+  <a href="https://github.com/decoder-dev/decoder-sec/actions/workflows/build-ipa.yml"><img src="https://github.com/decoder-dev/decoder-sec/actions/workflows/build-ipa.yml/badge.svg" alt="Build IPA" /></a>
+</p>
 
-## What it is
+## About
 
-- Native **Swift** app + Network Extension
+**decoder-sec** is a native Swift iOS app for managing proxy tunnels with a dark neon brand and Happ-compatible deep links for one-tap subscription import.
+
+- Packet Tunnel Network Extension
 - Engines via [EverywhereCore](https://github.com/NodePassProject/EverywhereCore): **Xray**, **sing-box**, **mihomo**
-- Brand: OLED black + neon green (`decoder sec.`)
-- Happ-compatible deep links (`happ://add/…`, routing, share-links)
-- GitHub Actions → IPA artifacts
+- OLED black + neon green UI
+- `happ://add/…`, routing profiles, share-links (`vless://`, `vmess://`, …)
+- IPA builds on GitHub Actions
 
 ## Identity
 
 | | |
 |---|---|
 | Display name | `decoder sec.` |
-| Xcode project | `DecoderSec.xcodeproj` |
+| Project | `DecoderSec.xcodeproj` |
 | Targets | `DecoderSec` · `DecoderSecTunnel` |
 | Bundle ID | `com.decodersec.app` |
 | Packet Tunnel | `com.decodersec.app.PacketTunnel` |
 | App Group | `group.com.decodersec.app` |
 
-Details: [BRAND.md](./BRAND.md) · deep links: [DEEPLINKS.md](./DEEPLINKS.md) · roadmap: [FORK.md](./FORK.md)
+[BRAND.md](./BRAND.md) · [DEEPLINKS.md](./DEEPLINKS.md) · [FORK.md](./FORK.md)
 
 ## Build
 
@@ -36,17 +45,15 @@ cd decoder-sec
 open DecoderSec.xcodeproj
 ```
 
-Unsigned IPA (CI / local macOS):
-
 ```bash
-./Scripts/ci_export_ipa.sh
+./Scripts/ci_export_ipa.sh   # unsigned IPA → build/ipa/
 ```
 
-Requires: Xcode 16+, Apple Team with Network Extension + App Group for the IDs above.
+Requires Xcode 16+ and an Apple Team with Network Extension + App Group for the IDs above.
 
 ## License
 
 GPLv3 — see [LICENSE](./LICENSE).
 
-Upstream networking cores: Xray-core, sing-box, mihomo.  
-Application lineage: [NodePassProject/Everywhere](https://github.com/NodePassProject/Everywhere).
+Upstream cores: Xray-core, sing-box, mihomo.  
+Lineage: [NodePassProject/Everywhere](https://github.com/NodePassProject/Everywhere).
