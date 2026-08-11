@@ -12,7 +12,6 @@
 #   IPA_DIR         path (default ./build/ipa)
 #   EXPORT_OPTIONS  plist path (default Config/ExportOptions-ad-hoc.plist)
 #   DEVELOPMENT_TEAM optional Apple Team ID override
-#   PRODUCT_BUNDLE_IDENTIFIER optional override for app id
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -27,40 +26,30 @@ EXPORT_OPTIONS="${EXPORT_OPTIONS:-$ROOT/Config/ExportOptions-ad-hoc.plist}"
 
 mkdir -p "$(dirname "$ARCHIVE_PATH")" "$IPA_DIR" "$DERIVED_DATA"
 
-EXTRA_FLAGS=()
-if [[ -n "${DEVELOPMENT_TEAM:-}" ]]; then
-  EXTRA_FLAGS+=(DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM")
-fi
-# Do not pass a global PRODUCT_BUNDLE_IDENTIFIER — it would clobber the NE target.
-# Change bundle IDs in the Xcode project (or a CI pbxproj patch) when rebranding.
-
 echo "→ wire SwiftPM deps"
 ./build.sh
 
+COMMON=(
+  -project DecoderSec.xcodeproj
+  -scheme DecoderSec
+  -configuration "$CONFIGURATION"
+  -destination 'generic/platform=iOS'
+  -archivePath "$ARCHIVE_PATH"
+  -derivedDataPath "$DERIVED_DATA"
+)
+if [[ -n "${DEVELOPMENT_TEAM:-}" ]]; then
+  COMMON+=(DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM")
+fi
+
 echo "→ archive ($CONFIGURATION, signing=$SIGNING)"
 if [[ "$SIGNING" == "unsigned" ]]; then
-  xcodebuild \
-    -project DecoderSec.xcodeproj \
-    -scheme DecoderSec \
-    -configuration "$CONFIGURATION" \
-    -destination 'generic/platform=iOS' \
-    -archivePath "$ARCHIVE_PATH" \
-    -derivedDataPath "$DERIVED_DATA" \
+  xcodebuild "${COMMON[@]}" \
     CODE_SIGNING_ALLOWED=NO \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGN_IDENTITY="" \
-    "${EXTRA_FLAGS[@]}" \
     archive
 else
-  xcodebuild \
-    -project DecoderSec.xcodeproj \
-    -scheme DecoderSec \
-    -configuration "$CONFIGURATION" \
-    -destination 'generic/platform=iOS' \
-    -archivePath "$ARCHIVE_PATH" \
-    -derivedDataPath "$DERIVED_DATA" \
-    "${EXTRA_FLAGS[@]}" \
-    archive
+  xcodebuild "${COMMON[@]}" archive
 
   echo "→ export IPA via $EXPORT_OPTIONS"
   xcodebuild \

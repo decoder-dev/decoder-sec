@@ -123,6 +123,7 @@ jobs:
     name: Check EverywhereCore / Xray freshness
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,7 +137,8 @@ jobs:
           echo "Latest EverywhereCore: $LATEST"
           XRAY=$(curl -fsSL https://proxy.golang.org/github.com/xtls/xray-core/@latest)
           echo "Latest Xray (Go proxy): $XRAY"
-          CORE_MOD=$(curl -fsSL "https://raw.githubusercontent.com/NodePassProject/EverywhereCore/v${LATEST}/go/go.mod" | awk '/xray-core/{print; exit}')
+          curl -fsSL "https://raw.githubusercontent.com/NodePassProject/EverywhereCore/v${LATEST}/go/go.mod" -o /tmp/everywherecore.go.mod
+          CORE_MOD=$(awk '/xray-core/{print; exit}' /tmp/everywherecore.go.mod)
           echo "Xray in latest EverywhereCore: $CORE_MOD"
           if [[ "$LATEST" > "$PIN" ]]; then
             echo "::warning::EverywhereCore floor $PIN is behind latest $LATEST — bump Scripts/wire_project.rb"
