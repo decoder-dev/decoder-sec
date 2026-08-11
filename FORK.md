@@ -7,19 +7,22 @@ Upstream lineage (GPLv3): [NodePassProject/Everywhere](https://github.com/NodePa
 ## Done
 
 - [x] Project rename → `DecoderSec` / `DecoderSecTunnel`
-- [x] Brand pack (logo, OLED + neon, bundle / app group)
-- [x] Happ-compatible deep links
-- [x] IPA via GitHub Actions
+- [x] Brand pack (logo, OLED + neon, bundle IDs)
+- [x] Happ-compatible deep links + crypt5 + HWID
+- [x] IPA via GitHub Actions (single full IPA for ESign)
 - [x] EverywhereCore floor `2026.08.09` (Xray `v1.260327.0`)
+- [x] Russian UI (`ru`)
+- [x] Ideal foundation: iOS 17+, NavigationStack, subscribe sheet, home empty state
 
-## Next (own roadmap)
+## Ideal roadmap
 
-1. Subscription UX (node list, one-tap connect) on top of BYOC editor
-2. Optional EverywhereCore fork for Xray-only / patches
-3. Lite NE mode (~50 MB) + geo trimming
-4. `ru` / `en` localization
-5. TestFlight / signed distribution when certs exist
-6. Provider portal hooks (deep links already in place)
+See **[docs/IDEAL.md](docs/IDEAL.md)** for the full plan.
+
+**Next up**
+1. Subscription node / profile list + one-tap connect
+2. In-app logs + session metrics
+3. Finish Settings localization
+4. TestFlight when certs exist
 
 ## Layout
 
@@ -29,6 +32,7 @@ DecoderSecTunnel/     # packet tunnel appex
 Shared/               # models, normalizers, deep links, brand identity
 Scripts/              # wire_project.rb, ci_export_ipa.sh
 ThirdParty/zashboard/ # dashboard UI bundle
+docs/IDEAL.md         # polish roadmap
 ```
 
 ## Env overrides

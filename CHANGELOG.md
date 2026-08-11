@@ -6,7 +6,19 @@ All notable changes to **decoder sec.** are documented here.
 
 ### Planned
 - Subscription UX (node list / one-tap connect)
+- In-app log console
 - Signed TestFlight builds
+
+## [0.1.0-beta.10] — 2026-08-11
+
+### Changed
+- Minimum iOS **17.0**; marketing version aligned to `0.1.0`
+- `NavigationStack`, modern `onChange`, ContentUnavailable empty states
+- Brand type: rounded display + mono chrome; quieter neon glow; iOS 26 panel material hook
+- Home empty state with **Add subscription** CTA
+- Subscribe sheet (SwiftUI) for https / `happ://crypt…` / share links
+- Xray running session shows brand + active config (not a blank stub)
+- Settings show app version; Ideal roadmap in `docs/IDEAL.md`
 
 ## [0.1.0-beta.9] — 2026-08-11
 

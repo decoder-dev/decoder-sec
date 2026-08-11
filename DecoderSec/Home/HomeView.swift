@@ -2,7 +2,7 @@
 //  HomeView.swift
 //  DecoderSec
 //
-//  decoder sec. home — one premium composition: brand, status, connect.
+//  decoder sec. home — one composition: brand, status, connect.
 //
 
 import NetworkExtension
@@ -14,53 +14,66 @@ struct HomeView: View {
     @ObservedObject private var store = ConfigurationStore.shared
     @State private var coreSwitchBlocked = false
     @State private var pulse = false
+    @State private var showSubscribe = false
+    @State private var heroAppeared = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Brand.Color.void.ignoresSafeArea()
                 ambientBackground
 
-                VStack(spacing: 0) {
-                    Spacer(minLength: 24)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        brandHero
+                            .padding(.top, 28)
+                            .padding(.bottom, 32)
+                            .opacity(heroAppeared ? 1 : 0)
+                            .offset(y: heroAppeared ? 0 : 12)
 
-                    brandHero
-                        .padding(.bottom, 36)
+                        statusLine
+                            .padding(.bottom, 24)
 
-                    statusLine
-                        .padding(.bottom, 28)
+                        if store.active == nil {
+                            emptyConfigCTA
+                                .padding(.bottom, 28)
+                        } else {
+                            connectControl
+                                .padding(.bottom, 32)
+                        }
 
-                    connectControl
-                        .padding(.bottom, 36)
-
-                    secondaryStrip
-
-                    Spacer(minLength: 16)
+                        secondaryStrip
+                            .padding(.bottom, 24)
+                    }
+                    .padding(.horizontal, 24)
                 }
-                .padding(.horizontal, 24)
+                .scrollIndicators(.hidden)
             }
-            .navigationBarHidden(true)
-            .alert("Tunnel is running", isPresented: $coreSwitchBlocked) {
-                Button("OK", role: .cancel) {}
+            .toolbar(.hidden, for: .navigationBar)
+            .alert(String(localized: "Tunnel is running"), isPresented: $coreSwitchBlocked) {
+                Button(String(localized: "OK"), role: .cancel) {}
             } message: {
                 Text(String(localized: "Stop the tunnel before switching cores."))
             }
             .alert(
-                "Connection failed",
+                String(localized: "Connection failed"),
                 isPresented: errorAlertBinding,
                 presenting: tunnel.lastError
             ) { _ in
-                Button("OK", role: .cancel) { tunnel.clearLastError() }
+                Button(String(localized: "OK"), role: .cancel) { tunnel.clearLastError() }
             } message: { message in
                 Text(message)
             }
+            .sheet(isPresented: $showSubscribe) {
+                SubscribeSheet()
+            }
             .onAppear {
-                withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) {
+                withAnimation(.easeOut(duration: 0.55)) { heroAppeared = true }
+                withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
                     pulse = true
                 }
             }
         }
-        .navigationViewStyle(.stack)
     }
 
     // MARK: - Sections
@@ -69,50 +82,53 @@ struct HomeView: View {
         ZStack {
             RadialGradient(
                 colors: [
-                    Brand.Color.neon.opacity(tunnel.status == .connected ? 0.18 : 0.08),
+                    Brand.Color.neon.opacity(tunnel.status == .connected ? 0.16 : 0.06),
                     .clear,
                 ],
                 center: .center,
                 startRadius: 20,
-                endRadius: 340
+                endRadius: 360
             )
-            .scaleEffect(pulse ? 1.08 : 0.92)
-            .blur(radius: 8)
-            .animation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true), value: pulse)
+            .scaleEffect(pulse ? 1.06 : 0.94)
+            .blur(radius: 10)
+            .animation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: pulse)
 
             LinearGradient(
                 colors: [
                     Brand.Color.void,
-                    Brand.Color.surface.opacity(0.35),
+                    Brand.Color.surface.opacity(0.28),
                     Brand.Color.void,
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .opacity(0.9)
+            .opacity(0.85)
         }
         .allowsHitTesting(false)
     }
 
     private var brandHero: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 16) {
             Image("BrandLogo")
                 .resizable()
                 .interpolation(.high)
                 .scaledToFit()
-                .frame(width: 112, height: 112)
-                .neonGlow(radius: tunnel.status == .connected ? 22 : 14, opacity: tunnel.status == .connected ? 0.7 : 0.4)
+                .frame(width: 108, height: 108)
+                .neonGlow(
+                    radius: tunnel.status == .connected ? 18 : 10,
+                    opacity: tunnel.status == .connected ? 0.55 : 0.28
+                )
                 .accessibilityHidden(true)
 
             VStack(spacing: 8) {
                 Text(Brand.displayName)
-                    .font(Brand.Font.display(34))
-                    .tracking(1.2)
+                    .font(Brand.Font.display(36))
+                    .tracking(0.8)
                     .foregroundStyle(Brand.Color.primaryText)
 
                 Text(Brand.tagline)
                     .font(Brand.Font.mono(12))
-                    .tracking(0.6)
+                    .tracking(0.5)
                     .foregroundStyle(Brand.Color.secondaryText)
             }
         }
@@ -123,18 +139,61 @@ struct HomeView: View {
             Circle()
                 .fill(statusColor)
                 .frame(width: 8, height: 8)
-                .neonGlow(radius: 6, opacity: tunnel.status == .connected ? 0.9 : 0.2)
+                .neonGlow(radius: 5, opacity: tunnel.status == .connected ? 0.8 : 0.15)
 
             Text(statusText.uppercased())
                 .font(Brand.Font.mono(12, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(Brand.Color.secondaryText)
-                .animation(.default, value: statusText)
+                .contentTransition(.numericText())
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Brand.Color.surface.opacity(0.85), in: Capsule())
+        .background(Capsule().fill(Brand.Color.surface.opacity(0.9)))
         .overlay(Capsule().stroke(Brand.Color.hairline, lineWidth: 1))
+    }
+
+    private var emptyConfigCTA: some View {
+        VStack(spacing: 14) {
+            Text(String(localized: "No active configuration"))
+                .font(Brand.Font.display(18))
+                .foregroundStyle(Brand.Color.primaryText)
+
+            Text(String(localized: "Import a Happ link or https subscription to connect."))
+                .font(Brand.Font.body(14))
+                .foregroundStyle(Brand.Color.secondaryText)
+                .multilineTextAlignment(.center)
+
+            Button {
+                showSubscribe = true
+            } label: {
+                Text(String(localized: "Add subscription"))
+                    .font(Brand.Font.display(16))
+                    .foregroundStyle(Brand.Color.void)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        LinearGradient(
+                            colors: [Brand.Color.neon, Brand.Color.neonDim],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    )
+                    .neonGlow(radius: 14, opacity: 0.4)
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink {
+                ConfigurationsView()
+            } label: {
+                Text(String(localized: "Browse configurations"))
+                    .font(Brand.Font.callout(14))
+                    .foregroundStyle(Brand.Color.neon)
+            }
+        }
+        .padding(20)
+        .brandPanel(cornerRadius: 18)
     }
 
     private var connectControl: some View {
@@ -145,7 +204,7 @@ struct HomeView: View {
         } label: {
             Text(connectTitle)
                 .font(Brand.Font.display(17))
-                .tracking(0.8)
+                .tracking(0.6)
                 .foregroundStyle(Brand.Color.void)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
@@ -157,7 +216,7 @@ struct HomeView: View {
                     ),
                     in: RoundedRectangle(cornerRadius: 16, style: .continuous)
                 )
-                .neonGlow(radius: 18, opacity: isToggleDisabled ? 0.15 : 0.55)
+                .neonGlow(radius: 14, opacity: isToggleDisabled ? 0.12 : 0.42)
         }
         .buttonStyle(.plain)
         .disabled(isToggleDisabled)
@@ -175,7 +234,7 @@ struct HomeView: View {
                         Text(String(localized: "Configuration"))
                             .font(Brand.Font.mono(11))
                             .foregroundStyle(Brand.Color.secondaryText)
-                        Text(store.active?.name ?? "None")
+                        Text(store.active?.name ?? String(localized: "None"))
                             .font(Brand.Font.body(16))
                             .foregroundStyle(Brand.Color.primaryText)
                             .lineLimit(1)
@@ -186,11 +245,7 @@ struct HomeView: View {
                         .foregroundStyle(Brand.Color.secondaryText)
                 }
                 .padding(16)
-                .background(Brand.Color.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Brand.Color.hairline, lineWidth: 1)
-                )
+                .brandPanel()
             }
             .buttonStyle(.plain)
 
@@ -208,11 +263,7 @@ struct HomeView: View {
             .disabled(isToggleDisabled)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Brand.Color.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Brand.Color.hairline, lineWidth: 1)
-            )
+            .brandPanel()
         }
     }
 

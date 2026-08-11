@@ -38,9 +38,9 @@ struct ContentView: View {
             }
         }
         .brandTheme()
-        .animation(.default, value: tunnel.coreRunning)
-        .animation(.default, value: minimized)
-        .onChange(of: tunnel.coreRunning) { running in
+        .animation(.snappy(duration: 0.28), value: tunnel.coreRunning)
+        .animation(.snappy(duration: 0.28), value: minimized)
+        .onChange(of: tunnel.coreRunning) { _, running in
             if !running { minimized = false }
         }
         .overlay(alignment: .top) {
@@ -49,7 +49,7 @@ struct ContentView: View {
                     storageBanner(storeError)
                 }
                 if deepLinks.isBusy {
-                    ProgressView("Handling deep link…")
+                    ProgressView(String(localized: "Handling deep link…"))
                         .tint(Brand.Color.neon)
                         .padding(10)
                         .background(Brand.Color.surface.opacity(0.92), in: Capsule())
@@ -67,18 +67,18 @@ struct ContentView: View {
                 set: { if !$0 { deepLinks.banner = nil } }
             )
         ) {
-            Button("OK", role: .cancel) { deepLinks.banner = nil }
+            Button(String(localized: "OK"), role: .cancel) { deepLinks.banner = nil }
         } message: {
             Text(deepLinks.banner ?? "")
         }
         .alert(
-            "Deep link error",
+            String(localized: "Deep link error"),
             isPresented: Binding(
                 get: { deepLinks.lastError != nil },
                 set: { if !$0 { deepLinks.lastError = nil } }
             )
         ) {
-            Button("OK", role: .cancel) { deepLinks.lastError = nil }
+            Button(String(localized: "OK"), role: .cancel) { deepLinks.lastError = nil }
         } message: {
             Text(deepLinks.lastError ?? "")
         }
@@ -88,8 +88,6 @@ struct ContentView: View {
         Task { await tunnel.setEnabled(false, configuration: store.active) }
     }
 
-    /// Lightweight, non-blocking notice shown when local storage is degraded.
-    /// The app stays usable; configurations just can't be persisted this run.
     private func storageBanner(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -107,17 +105,15 @@ struct ContentView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Brand.Color.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Brand.Color.hairline, lineWidth: 1)
-        )
+        .brandPanel(cornerRadius: 12)
     }
 }
 
 private struct RunningRootView: View {
     @ObservedObject private var store = ConfigurationStore.shared
     @ObservedObject private var appState = AppState.shared
+    @ObservedObject private var tunnel = TunnelManager.shared
+    @State private var pulse = false
 
     var body: some View {
         ZStack {
@@ -125,23 +121,70 @@ private struct RunningRootView: View {
             if appState.useZashboardEnabled && store.selectedCore != .xray {
                 DashboardView()
             } else {
-                VStack(spacing: 16) {
-                    Image("BrandLogo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 72, height: 72)
-                        .neonGlow(radius: 18, opacity: 0.65)
-
-                    Text(Brand.displayName)
-                        .font(Brand.Font.display(22))
-                        .foregroundStyle(Brand.Color.primaryText)
-
-                    Text("\(store.selectedCore.displayName) is running")
-                        .font(Brand.Font.mono(13))
-                        .foregroundStyle(Brand.Color.secondaryText)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                sessionChrome
             }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
+    }
+
+    private var sessionChrome: some View {
+        ZStack {
+            RadialGradient(
+                colors: [Brand.Color.neon.opacity(0.14), .clear],
+                center: .center,
+                startRadius: 10,
+                endRadius: 280
+            )
+            .scaleEffect(pulse ? 1.05 : 0.95)
+            .allowsHitTesting(false)
+
+            VStack(spacing: 18) {
+                Image("BrandLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 76, height: 76)
+                    .neonGlow(radius: 16, opacity: 0.5)
+
+                Text(Brand.displayName)
+                    .font(Brand.Font.display(24))
+                    .foregroundStyle(Brand.Color.primaryText)
+
+                Text(String(localized: "\(store.selectedCore.displayName) is running"))
+                    .font(Brand.Font.mono(13))
+                    .foregroundStyle(Brand.Color.secondaryText)
+
+                if let name = store.active?.name {
+                    Text(name)
+                        .font(Brand.Font.body(15))
+                        .foregroundStyle(Brand.Color.primaryText)
+                        .lineLimit(1)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .brandPanel(cornerRadius: 12)
+                        .padding(.top, 8)
+                }
+
+                Text(sessionStatus)
+                    .font(Brand.Font.mono(11, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.neon)
+                    .padding(.top, 4)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var sessionStatus: String {
+        switch tunnel.status {
+        case .connected: return String(localized: "Connected").uppercased()
+        case .connecting: return String(localized: "Connecting").uppercased()
+        case .reasserting: return String(localized: "Reconnecting").uppercased()
+        default: return String(localized: "Running").uppercased()
         }
     }
 }

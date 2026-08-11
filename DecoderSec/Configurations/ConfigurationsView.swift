@@ -16,6 +16,7 @@ struct ConfigurationsView: View {
     @State private var fileImporting = false
     @State private var isDownloading = false
     @State private var importErrorMessage: String?
+    @State private var showSubscribe = false
 
     private var activeID: UUID? { store.activeIDByCoreType[store.selectedCore] }
 
@@ -50,6 +51,18 @@ struct ConfigurationsView: View {
                 }
             }
         }
+        .overlay {
+            if store.configurationsForSelectedCore.isEmpty {
+                ContentUnavailableView {
+                    Label(String(localized: "No configurations"), systemImage: "doc.badge.plus")
+                } description: {
+                    Text(String(localized: "Create one, import a file, or add a subscription."))
+                } actions: {
+                    Button(String(localized: "Subscribe")) { showSubscribe = true }
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+        }
         .navigationTitle("\(store.selectedCore.displayName) configurations")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -69,7 +82,7 @@ struct ConfigurationsView: View {
                             Label("Import from file", systemImage: "doc")
                         }
                         Button {
-                            promptSubscribe()
+                            showSubscribe = true
                         } label: {
                             Label("Subscribe", systemImage: "link")
                         }
@@ -78,6 +91,9 @@ struct ConfigurationsView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showSubscribe) {
+            SubscribeSheet()
         }
         .fileImporter(
             isPresented: $fileImporting,
@@ -181,16 +197,6 @@ struct ConfigurationsView: View {
         }
     }
 
-    private func promptSubscribe() {
-        let core = store.selectedCore
-        URLInputAlert.present(
-            title: String(localized: "Subscribe to \(core.displayName) configuration"),
-            message: String(localized: "Enter an https subscription URL or a happ://crypt… / share link.")
-        ) { url in
-            importFromSubscribeField(url)
-        }
-    }
-
     private func extractRemarks(from content: String, fallbackUrl: URL) -> String {
         // JSON
         if let data = content.data(using: .utf8),
@@ -218,23 +224,6 @@ struct ConfigurationsView: View {
             }
         case .failure(let err):
             importErrorMessage = err.localizedDescription
-        }
-    }
-
-    /// Subscribe field: https → HWID fetch; happ://crypt5 / share links → DeepLinkCenter.
-    private func importFromSubscribeField(_ url: URL) {
-        isDownloading = true
-        Task { @MainActor in
-            defer { isDownloading = false }
-            let scheme = (url.scheme ?? "").lowercased()
-            if scheme == "http" || scheme == "https" {
-                await DeepLinkCenter.shared.perform(.addSubscription(url))
-            } else {
-                await DeepLinkCenter.shared.handleAsync(url)
-            }
-            if let err = DeepLinkCenter.shared.lastError {
-                importErrorMessage = err
-            }
         }
     }
 

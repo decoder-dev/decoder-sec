@@ -736,7 +736,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ввод/вывод"
+            "value": "IO"
           }
         }
       }
@@ -1374,7 +1374,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Туннель активен"
+            "value": "Туннель запущен"
           }
         }
       }
@@ -2050,6 +2050,214 @@
           "stringUnit": {
             "state": "translated",
             "value": "https://… или happ://crypt5/…"
+          }
+        }
+      }
+    },
+    "Paste a subscription URL, happ://crypt… link, or vless:// node.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste a subscription URL, happ://crypt… link, or vless:// node."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставьте URL подписки, ссылку happ://crypt… или vless:// узел."
+          }
+        }
+      }
+    },
+    "Import": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импорт"
+          }
+        }
+      }
+    },
+    "Unrecognized link. Use https://, happ://crypt…, or a share link.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unrecognized link. Use https://, happ://crypt…, or a share link."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Неизвестная ссылка. Используйте https://, happ://crypt… или share-ссылку."
+          }
+        }
+      }
+    },
+    "No active configuration": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No active configuration"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет активной конфигурации"
+          }
+        }
+      }
+    },
+    "Import a Happ link or https subscription to connect.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import a Happ link or https subscription to connect."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импортируйте Happ-ссылку или https-подписку, чтобы подключиться."
+          }
+        }
+      }
+    },
+    "Add subscription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add subscription"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить подписку"
+          }
+        }
+      }
+    },
+    "Browse configurations": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse configurations"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "К конфигурациям"
+          }
+        }
+      }
+    },
+    "No configurations": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No configurations"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет конфигураций"
+          }
+        }
+      }
+    },
+    "Create one, import a file, or add a subscription.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create one, import a file, or add a subscription."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создайте, импортируйте файл или добавьте подписку."
+          }
+        }
+      }
+    },
+    "Deep link error": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deep link error"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ошибка deep link"
+          }
+        }
+      }
+    },
+    "Handling deep link…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handling deep link…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обработка deep link…"
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Версия"
+          }
+        }
+      }
+    },
+    "Running": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Работает"
           }
         }
       }
