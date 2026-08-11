@@ -32,6 +32,11 @@ struct SettingsView: View {
                     } label: {
                         Label("DNS", systemImage: "network")
                     }
+                    NavigationLink {
+                        RoutingSettingsView()
+                    } label: {
+                        Label("Happ routing", systemImage: "arrow.triangle.branch")
+                    }
                 }
 
                 Section("IO") {

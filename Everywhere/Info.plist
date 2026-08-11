@@ -1,5 +1,48 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict/>
+<dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>su.happ.deeplink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>happ</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.argsment.Everywhere.deeplink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>everywhere</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>com.argsment.Everywhere.sharelinks</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>vless</string>
+				<string>vmess</string>
+				<string>trojan</string>
+				<string>ss</string>
+				<string>socks</string>
+				<string>socks5</string>
+				<string>hysteria2</string>
+				<string>hy2</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
+</dict>
 </plist>

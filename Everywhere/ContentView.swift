@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject private var tunnel = TunnelManager.shared
     @ObservedObject private var store = ConfigurationStore.shared
+    @EnvironmentObject private var deepLinks: DeepLinkCenter
     @State private var minimized: Bool = false
 
     var body: some View {
@@ -41,6 +42,36 @@ struct ContentView: View {
         .animation(.default, value: minimized)
         .onChange(of: tunnel.coreRunning) { running in
             if !running { minimized = false }
+        }
+        .overlay(alignment: .top) {
+            if deepLinks.isBusy {
+                ProgressView("Handling deep link…")
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.top, 8)
+            }
+        }
+        .alert(
+            "Deep link",
+            isPresented: Binding(
+                get: { deepLinks.banner != nil },
+                set: { if !$0 { deepLinks.banner = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { deepLinks.banner = nil }
+        } message: {
+            Text(deepLinks.banner ?? "")
+        }
+        .alert(
+            "Deep link error",
+            isPresented: Binding(
+                get: { deepLinks.lastError != nil },
+                set: { if !$0 { deepLinks.lastError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { deepLinks.lastError = nil }
+        } message: {
+            Text(deepLinks.lastError ?? "")
         }
     }
 

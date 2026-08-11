@@ -19,7 +19,7 @@ Upstream EverywhereCore already auto-releases when Xray/sing-box/mihomo move. Th
 2. **Core control** — optional fork of EverywhereCore + `EVERYWHERE_CORE_REPO` override when you need patches ahead of upstream.
 3. **Subscription UX** — Happ/INCY-style: paste URL / QR → node list → one-tap connect (keep raw JSON/YAML editor as power-user mode).
 4. **Share-link parsers** — `vless://`, `vmess://`, `trojan://`, `ss://`, `hy2://` → Xray/sing-box outbound (reuse docs formats from INCY as a compatibility reference).
-5. **Deep links** — `everywhere://import?...` / connect / disconnect for provider bots.
+5. **Deep links** — **Happ-compatible `happ://`** (see [DEEPLINKS.md](./DEEPLINKS.md)): `add`, `routing/onadd`, share-links, connect/disconnect.
 6. **NE memory profile** — iOS Network Extension ~50 MB; add “lite” routing / geo trimming toggle.
 7. **Branding pack** — rename display name, icons, `PRODUCT_BUNDLE_IDENTIFIER`, app group (requires your Apple Team + NE entitlements).
 8. **Xray-only slim build** (optional later) — drop mihomo/sing-box from EverywhereCore to shrink binary and attack surface.
