@@ -11,7 +11,7 @@ enum URLInputAlert {
     static func present(
         title: String,
         message: String? = nil,
-        placeholder: String = "https://",
+        placeholder: String = "https://… or happ://crypt5/…",
         onSubmit: @escaping (URL) -> Void
     ) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
@@ -44,16 +44,30 @@ enum URLInputAlert {
         topViewController()?.present(alert, animated: true)
     }
 
+    /// Accepts https subscriptions, Happ deep links (`happ://crypt5/…`), and share links.
     private static func parsed(_ raw: String) -> URL? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              let url = URL(string: trimmed),
-              let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https",
-              url.host?.isEmpty == false else {
-            return nil
+        guard !trimmed.isEmpty else { return nil }
+
+        // Prefer Foundation parsing; fall back to percent-encoding odd characters in the path.
+        let url = URL(string: trimmed) ?? URL(string: trimmed.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? "")
+        guard let url, let scheme = url.scheme?.lowercased() else { return nil }
+
+        if scheme == "http" || scheme == "https" {
+            guard let host = url.host, !host.isEmpty else { return nil }
+            return url
         }
-        return url
+
+        if HappDeepLink.aliasSchemes.contains(scheme) {
+            // happ://crypt5/… — host is "crypt5"; happ://add/https://… also OK
+            return url
+        }
+
+        if HappDeepLink.shareSchemes.contains(scheme) {
+            return url
+        }
+
+        return nil
     }
 
     private static func topViewController() -> UIViewController? {

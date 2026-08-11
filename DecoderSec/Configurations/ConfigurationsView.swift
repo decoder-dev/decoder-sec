@@ -185,9 +185,9 @@ struct ConfigurationsView: View {
         let core = store.selectedCore
         URLInputAlert.present(
             title: String(localized: "Subscribe to \(core.displayName) configuration"),
-            message: String(localized: "Enter a subscription URL.")
+            message: String(localized: "Enter an https subscription URL or a happ://crypt… / share link.")
         ) { url in
-            download(from: url, for: core)
+            importFromSubscribeField(url)
         }
     }
 
@@ -199,16 +199,6 @@ struct ConfigurationsView: View {
             !remarks.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return remarks.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-
-        // YAML
-        /* for line in content.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("remarks:") else { continue }
-            let value = String(trimmed.dropFirst(8))
-                .trimmingCharacters(in: .whitespaces)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-            if !value.isEmpty { return value }
-        } */
 
         return derivedName(from: fallbackUrl)
     }
@@ -231,16 +221,19 @@ struct ConfigurationsView: View {
         }
     }
 
-    private func download(from url: URL, for core: CoreType) {
+    /// Subscribe field: https → HWID fetch; happ://crypt5 / share links → DeepLinkCenter.
+    private func importFromSubscribeField(_ url: URL) {
         isDownloading = true
-        Task {
-            defer { Task { @MainActor in isDownloading = false } }
-            do {
-                let content = try await fetchConfig(from: url)
-                let name = extractRemarks(from: content, fallbackUrl: url)
-                store.create(name: name, type: core, content: content, sourceURL: url.absoluteString)
-            } catch {
-                importErrorMessage = error.localizedDescription
+        Task { @MainActor in
+            defer { isDownloading = false }
+            let scheme = (url.scheme ?? "").lowercased()
+            if scheme == "http" || scheme == "https" {
+                await DeepLinkCenter.shared.perform(.addSubscription(url))
+            } else {
+                await DeepLinkCenter.shared.handleAsync(url)
+            }
+            if let err = DeepLinkCenter.shared.lastError {
+                importErrorMessage = err
             }
         }
     }
@@ -248,36 +241,15 @@ struct ConfigurationsView: View {
     private func updateSubscription(_ config: Configuration) {
         guard let raw = config.sourceURL, let url = URL(string: raw) else { return }
         isDownloading = true
-        Task {
-            defer { Task { @MainActor in isDownloading = false } }
+        Task { @MainActor in
+            defer { isDownloading = false }
             do {
-                let content = try await fetchConfig(from: url)
-                store.update(config, content: content)
+                let result = try await SubscriptionImporter.fetch(from: url)
+                store.update(config, content: result.content)
             } catch {
                 importErrorMessage = error.localizedDescription
             }
         }
-    }
-
-    private func fetchConfig(from url: URL) async throws -> String {
-        var request = URLRequest(url: url)
-        request.setValue("decodersec/1.0 Clash/1.11.0", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            throw NSError(
-                domain: "DecoderSecDownload",
-                code: http.statusCode,
-                userInfo: [NSLocalizedDescriptionKey: "Server returned HTTP \(http.statusCode)."]
-            )
-        }
-        guard let content = String(data: data, encoding: .utf8) else {
-            throw NSError(
-                domain: "DecoderSecDownload",
-                code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "Response is not valid UTF-8 text."]
-            )
-        }
-        return content
     }
 
     private func derivedName(from url: URL) -> String {

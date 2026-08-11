@@ -25,6 +25,6 @@ DecoderSec.ipa → ESign → подпись с Network Extension → Install →
 | `vX.Y.Z-beta.N` | Prerelease |
 
 ```bash
-git tag -a v0.1.0-beta.8 -m "decoder sec. v0.1.0-beta.8"
-git push origin v0.1.0-beta.8
+git tag -a v0.1.0-beta.9 -m "decoder sec. v0.1.0-beta.9"
+git push origin v0.1.0-beta.9
 ```

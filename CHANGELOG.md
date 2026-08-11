@@ -8,6 +8,12 @@ All notable changes to **decoder sec.** are documented here.
 - Subscription UX (node list / one-tap connect)
 - Signed TestFlight builds
 
+## [0.1.0-beta.9] — 2026-08-11
+
+### Fixed
+- Диалог «Подписка» принимает `happ://crypt5/…` и share-ссылки (раньше только http/https)
+- Загрузка подписки из этого диалога идёт через DeepLinkCenter + HWID (как deep link)
+
 ## [0.1.0-beta.8] — 2026-08-11
 
 ### Added

@@ -2021,6 +2021,38 @@
           }
         }
       }
+    },
+    "Enter an https subscription URL or a happ://crypt… / share link.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter an https subscription URL or a happ://crypt… / share link."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставьте https:// URL подписки или ссылку happ://crypt… / vless://…"
+          }
+        }
+      }
+    },
+    "https://… or happ://crypt5/…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "https://… or happ://crypt5/…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "https://… или happ://crypt5/…"
+          }
+        }
+      }
     }
   },
   "version": "1.1"
