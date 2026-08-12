@@ -5,3 +5,5 @@
 
 #include "ds_tunnel_fd.h"
 #include "ds_config_scan.h"
+#include "ds_file_io.h"
+#include "ds_bytes.h"

@@ -21,6 +21,7 @@
 //  queues both touch.
 //
 
+import Darwin
 import EverywhereCore
 import Network
 import NetworkExtension
@@ -87,19 +88,23 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private static func writeLastError(_ message: String) {
         let body = "\(ISO8601DateFormatter().string(from: Date()))\n\(String(message.prefix(4096)))"
-        do {
-            let url = lastErrorFileURL
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try body.data(using: .utf8)?.write(to: url, options: [.atomic])
+        let url = lastErrorFileURL
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let written = body.withCString { ptr -> Int32 in
+            ds_atomic_write(url.path, ptr, strlen(ptr))
+        }
+        if written == 0 {
             TunnelLogBuffer.shared.append("lastError file saved: \(url.path)")
-        } catch {
-            TunnelLogBuffer.shared.append("lastError file write failed: \(error.localizedDescription)")
+        } else {
+            TunnelLogBuffer.shared.append("lastError file write failed errno=\(errno)")
         }
     }
 
     private static func readLastError() -> String? {
-        guard let data = try? Data(contentsOf: lastErrorFileURL),
-              let text = String(data: data, encoding: .utf8) else { return nil }
+        var len: Int = 0
+        guard let raw = ds_read_file(lastErrorFileURL.path, &len) else { return nil }
+        defer { free(raw) }
+        let text = String(cString: raw)
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }

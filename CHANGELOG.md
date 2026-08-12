@@ -4,6 +4,16 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.36] — 2026-08-12
+
+### Changed
+- **More heavy paths in C** (`Shared/C/`):
+  - `ds_config_scan` — single-pass multi-needle scan (early-exit)
+  - `ds_json_blank_geo_strings` — blank `geosite:`/`geoip:` JSON strings before Swift normalize
+  - `ds_atomic_write` / `ds_read_file` — last-core-error I/O in Packet Tunnel
+  - `ds_swap_adjacent` / `ds_swap_block_halves` / `ds_base64_decode` — Happ crypt5 byte ops
+- Settings version: **0.1.0 (36)**
+
 ## [0.1.0-beta.35] — 2026-08-12
 
 ### Changed

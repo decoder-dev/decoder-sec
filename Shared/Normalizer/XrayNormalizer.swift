@@ -22,7 +22,16 @@ enum XrayNormalizer: JSONCoreNormalizer {
     }
 
     static func normalize(_ content: String, useZashboard _: Bool, stripGeoRules: Bool) throws -> String {
-        var root = try parseJSONObject(content)
+        // C pre-pass blanks geosite:/geoip: JSON string literals to "" before
+        // Foundation JSONSerialization — avoids large intermediate trees when
+        // Happ configs carry dozens of whitelist geo categories.
+        let prepared: String
+        if stripGeoRules {
+            prepared = blankGeoStringsInC(content) ?? content
+        } else {
+            prepared = content
+        }
+        var root = try parseJSONObject(prepared)
 
         // Balancers without live observatory hang or fail on iOS TUN.
         // v2rayNG keeps observatory WITH balancers; we flatten to a fixed outbound.
@@ -275,14 +284,26 @@ enum XrayNormalizer: JSONCoreNormalizer {
     private static func stripGeoTokens(from rule: [String: Any], key: String, prefix: String) -> [String: Any] {
         var copy = rule
         if let values = copy[key] as? [Any] {
-            let filtered = values.compactMap { $0 as? String }.filter { !$0.lowercased().hasPrefix(prefix) }
+            let filtered = values.compactMap { $0 as? String }
+                .filter { !$0.isEmpty && !$0.lowercased().hasPrefix(prefix) }
             if filtered.isEmpty { copy.removeValue(forKey: key) } else { copy[key] = filtered }
         } else if let single = copy[key] as? String {
-            if single.lowercased().hasPrefix(prefix) {
+            if single.isEmpty || single.lowercased().hasPrefix(prefix) {
                 copy.removeValue(forKey: key)
             }
         }
         return copy
+    }
+
+    /// Shared/C `ds_json_blank_geo_strings` — returns nil if C alloc fails.
+    private static func blankGeoStringsInC(_ content: String) -> String? {
+        content.withCString { ptr -> String? in
+            let len = strlen(ptr)
+            var outLen: Int = 0
+            guard let raw = ds_json_blank_geo_strings(ptr, len, &outLen) else { return nil }
+            defer { free(raw) }
+            return String(cString: raw)
+        }
     }
 
     private static func looksLikeCatchAll(_ rule: [String: Any]) -> Bool {

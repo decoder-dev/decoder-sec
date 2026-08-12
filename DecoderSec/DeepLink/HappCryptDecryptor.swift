@@ -7,6 +7,7 @@
 //
 
 import CryptoKit
+import Darwin
 import Foundation
 import Security
 
@@ -308,24 +309,26 @@ enum HappCryptDecryptor {
     }
 
     private static func decodeBase64(_ value: String) throws -> [UInt8] {
-        var clean = value
+        var cleaned = value
             .replacingOccurrences(of: "\\s", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-        while clean.hasSuffix("=") { clean.removeLast() }
-        while clean.count % 4 != 0 { clean.append("=") }
-        guard let data = Data(base64Encoded: clean, options: [.ignoreUnknownCharacters]) else {
-            throw DecryptError.badPayload("base64")
+        while cleaned.count % 4 != 0 { cleaned.append("=") }
+        let maxOut = max(4, (cleaned.utf8.count * 3) / 4 + 4)
+        var out = [UInt8](repeating: 0, count: maxOut)
+        let decoded = out.withUnsafeMutableBufferPointer { buf -> Int32 in
+            cleaned.withCString { ptr in
+                ds_base64_decode(ptr, strlen(ptr), buf.baseAddress, maxOut)
+            }
         }
-        return [UInt8](data)
+        guard decoded >= 0 else { throw DecryptError.badPayload("base64") }
+        return Array(out.prefix(Int(decoded)))
     }
 
     private static func swapAdjacent(_ bytes: [UInt8]) -> [UInt8] {
         var result = bytes
-        var i = 0
-        while i + 1 < result.count {
-            result.swapAt(i, i + 1)
-            i += 2
+        result.withUnsafeMutableBufferPointer { buf in
+            if let base = buf.baseAddress {
+                ds_swap_adjacent(base, result.count)
+            }
         }
         return result
     }
@@ -333,12 +336,10 @@ enum HappCryptDecryptor {
     /// ABCD → CDAB per 4-byte block (self-inverse).
     private static func swapBlockHalves(_ bytes: [UInt8]) -> [UInt8] {
         var result = bytes
-        let full = result.count - (result.count % 4)
-        var i = 0
-        while i < full {
-            result.swapAt(i, i + 2)
-            result.swapAt(i + 1, i + 3)
-            i += 4
+        result.withUnsafeMutableBufferPointer { buf in
+            if let base = buf.baseAddress {
+                ds_swap_block_halves(base, result.count)
+            }
         }
         return result
     }
