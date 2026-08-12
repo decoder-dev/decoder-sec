@@ -7,6 +7,7 @@
 //  for .shared directly. Phase 2 rewrite.
 //
 
+import Combine
 import SwiftUI
 
 /// Owns the app's singletons and injects them into the SwiftUI tree.
@@ -17,6 +18,8 @@ import SwiftUI
 ///
 @MainActor
 final class AppEnvironment: ObservableObject {
+
+    let objectWillChange = PassthroughSubject<Void, Never>()
 
     // MARK: - Singletons (assembled once here, injected everywhere else)
 
