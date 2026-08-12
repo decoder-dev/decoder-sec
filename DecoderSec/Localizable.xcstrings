@@ -2261,6 +2261,54 @@
           }
         }
       }
+    },
+    "Refresh subscriptions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh subscriptions"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновить подписки"
+          }
+        }
+      }
+    },
+    "Some subscriptions failed to refresh (%lld).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some subscriptions failed to refresh (%lld)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Некоторые подписки не удалось обновить (%lld)."
+          }
+        }
+      }
+    },
+    "Some subscriptions failed to refresh (%@).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some subscriptions failed to refresh (%@)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Некоторые подписки не удалось обновить (%@)."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

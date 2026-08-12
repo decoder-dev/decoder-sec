@@ -9,6 +9,12 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.12] — 2026-08-12
+
+### Added
+- Список профилей: быстрый **Connect** (кнопка в строке + swipe)
+- Pull-to-refresh и массовое обновление подписок из меню
+
 ## [0.1.0-beta.11] — 2026-08-12
 
 ### Fixed

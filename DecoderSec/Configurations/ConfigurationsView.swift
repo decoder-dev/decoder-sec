@@ -17,6 +17,7 @@ struct ConfigurationsView: View {
     @State private var isDownloading = false
     @State private var importErrorMessage: String?
     @State private var showSubscribe = false
+    @State private var isRefreshingAll = false
 
     private var activeID: UUID? { store.activeIDByCoreType[store.selectedCore] }
 
@@ -27,6 +28,14 @@ struct ConfigurationsView: View {
                     ConfigEditorScreen(configuration: config)
                 } label: {
                     row(for: config)
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    Button {
+                        quickConnect(config)
+                    } label: {
+                        Label(String(localized: "Connect"), systemImage: "bolt.fill")
+                    }
+                    .tint(.mint)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     if config.sourceURL != nil {
@@ -70,6 +79,10 @@ struct ConfigurationsView: View {
                 .padding(20)
             }
         }
+
+        .refreshable {
+            await refreshSubscriptions()
+        }
         .navigationTitle("\(store.selectedCore.displayName) configurations")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -92,6 +105,13 @@ struct ConfigurationsView: View {
                             showSubscribe = true
                         } label: {
                             Label("Subscribe", systemImage: "link")
+                        }
+                        if store.configurationsForSelectedCore.contains(where: { $0.sourceURL != nil }) {
+                            Button {
+                                Task { await refreshSubscriptions() }
+                            } label: {
+                                Label(String(localized: "Refresh subscriptions"), systemImage: "arrow.clockwise")
+                            }
                         }
                     } label: {
                         Image(systemName: "plus")
@@ -149,6 +169,15 @@ struct ConfigurationsView: View {
                     .lineLimit(1)
             }
             Spacer()
+            Button {
+                quickConnect(config)
+            } label: {
+                Image(systemName: "bolt.circle.fill")
+                    .font(.title3)
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(activeID == config.id && tunnel.status.isActive ? Color.green : Color.accentColor)
+            .accessibilityLabel(String(localized: "Connect"))
         }
         .contentShape(Rectangle())
     }
@@ -245,6 +274,46 @@ struct ConfigurationsView: View {
             } catch {
                 importErrorMessage = error.localizedDescription
             }
+        }
+    }
+
+
+    private func quickConnect(_ config: Configuration) {
+        Task { @MainActor in
+            if tunnel.status.isActive {
+                await tunnel.setEnabled(false, configuration: store.active)
+            }
+            store.setActive(config)
+            await tunnel.setEnabled(true, configuration: config)
+            if let err = tunnel.lastError { importErrorMessage = err }
+        }
+    }
+
+    private func refreshSubscriptions() async {
+        guard !isRefreshingAll else { return }
+        let targets = store.configurationsForSelectedCore.filter { $0.sourceURL != nil }
+        guard !targets.isEmpty else { return }
+
+        isRefreshingAll = true
+        isDownloading = true
+        defer {
+            isRefreshingAll = false
+            isDownloading = false
+        }
+
+        var failCount = 0
+        for config in targets {
+            do {
+                guard let raw = config.sourceURL, let url = URL(string: raw) else { continue }
+                let result = try await SubscriptionImporter.fetch(from: url)
+                store.update(config, content: result.content)
+            } catch {
+                failCount += 1
+            }
+        }
+
+        if failCount > 0 {
+            importErrorMessage = String(localized: "Some subscriptions failed to refresh (\(failCount)).")
         }
     }
 
