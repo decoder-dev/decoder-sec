@@ -48,7 +48,7 @@ struct HomeView: View {
                     .padding(.horizontal, 24)
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationBarHidden(true)
             .alert(String(localized: "Tunnel is running"), isPresented: $coreSwitchBlocked) {
                 Button(String(localized: "OK"), role: .cancel) {}
             } message: {

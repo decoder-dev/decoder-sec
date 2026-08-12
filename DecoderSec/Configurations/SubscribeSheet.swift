@@ -44,18 +44,13 @@ struct SubscribeSheet: View {
             .background(Brand.Color.void.ignoresSafeArea())
             .navigationTitle(String(localized: "Subscribe"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
+            .navigationBarItems(
+                leading: Button(String(localized: "Cancel")) { dismiss() },
+                trailing: Button(String(localized: "Import")) {
+                    Task { await submit() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Import")) {
-                        Task { await submit() }
-                    }
-                    .disabled(raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || deepLinks.isBusy)
-                    .fontWeight(.semibold)
-                }
-            }
+                .disabled(raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || deepLinks.isBusy)
+            )
             .overlay {
                 if deepLinks.isBusy {
                     ProgressView()

@@ -103,6 +103,5 @@ private struct HideScrollBackgroundIfAvailable: ViewModifier {
         } else {
             content
         }
-        .navigationViewStyle(.stack)
     }
 }
