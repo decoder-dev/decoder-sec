@@ -4,6 +4,16 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.38] — 2026-08-12
+
+### Added (Xray docs gaps — Claude audit)
+- **Always inject `dns`** when missing/empty (`queryStrategy: UseIP` + `1.1.1.1`/`8.8.8.8`) — prevents DNS leak via OS resolver inside Packet Tunnel ([Xray DNS](https://xtls.github.io/en/config/dns.html), INCY precedent)
+- **Preserve `dialerProxy` / `proxySettings` chains** in minimal boot (WARP→VLESS etc.) — [sockopt docs](https://xtls.github.io/en/config/transport.html)
+- **Strip geo tokens** from `expectedIPs` / `unexpectedIPs` / `sourceIP` / `localIP` on geo-strip retry (same hard-fail class as routing `domain`/`ip`)
+- **Keep `random`/`roundRobin` balancers**; only flatten `leastPing`/`leastLoad` (need observatory)
+- Minimal boot `queryStrategy`: `UseIP` (not `UseIPv4`); preserve provider sniffing excludes when present
+- Hazard: `dns-missing`
+
 ## [0.1.0-beta.37] — 2026-08-12
 
 ### Added
