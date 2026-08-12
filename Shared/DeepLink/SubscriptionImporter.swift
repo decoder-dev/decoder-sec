@@ -200,10 +200,6 @@ enum SubscriptionImporter {
         return nil
     }
 
-    private static func isHWIDRejected(http: HTTPURLResponse) -> Bool {
-        headerTruthy(http, "x-hwid-not-supported") || headerTruthy(http, "X-Hwid-Not-Supported")
-    }
-
     private static func looksLikeUnsupportedDummy(_ text: String) -> Bool {
         let lower = text.lowercased()
         return lower.contains("app%20not%20supported")
