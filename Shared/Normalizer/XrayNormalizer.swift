@@ -60,7 +60,7 @@ enum XrayNormalizer: JSONCoreNormalizer {
         }
         root["inbounds"] = inbounds
         root["log"] = cappedLog(root["log"] as? [String: Any])
-        root["dns"] = sanitizeDNS(root["dns"])
+        root["dns"] = sanitizeDNS(root["dns"], stripGeoRules: stripGeoRules)
         let outbounds = sanitizeOutbounds(root["outbounds"] as? [[String: Any]] ?? [])
         root["outbounds"] = outbounds
         root["routing"] = sanitizeRouting(
@@ -93,39 +93,50 @@ enum XrayNormalizer: JSONCoreNormalizer {
         return servers.contains { entry in
             if let s = entry as? String {
                 let t = s.trimmingCharacters(in: .whitespaces).lowercased()
-                return t == "localhost" || t == "127.0.0.1"
+                return isLocalhostResolver(t)
             }
             if let obj = entry as? [String: Any], let address = obj["address"] as? String {
                 let t = address.trimmingCharacters(in: .whitespaces).lowercased()
-                return t == "localhost" || t == "127.0.0.1"
+                return isLocalhostResolver(t)
             }
             return false
         }
     }
 
     private static func sanitizeOutbounds(_ outbounds: [[String: Any]]) -> [[String: Any]] {
-        outbounds.map { outbound in
+        var sanitized = outbounds.map { outbound in
             var copy = outbound
             copy.removeValue(forKey: "burstObservatory")
             copy.removeValue(forKey: "observatory")
             return copy
         }
+        if sanitized.isEmpty || !sanitized.contains(where: { ($0["tag"] as? String) == "direct" }) {
+            sanitized.append([
+                "tag": "direct",
+                "protocol": "freedom",
+            ])
+        }
+        return sanitized
     }
 
-    private static func sanitizeDNS(_ dns: Any?) -> Any? {
+    private static func sanitizeDNS(_ dns: Any?, stripGeoRules: Bool) -> Any? {
         guard var dnsObj = dns as? [String: Any] else { return dns }
         guard var servers = dnsObj["servers"] as? [Any] else { return dns }
 
         servers = servers.compactMap { entry -> Any? in
             if let s = entry as? String {
                 let trimmed = s.trimmingCharacters(in: .whitespaces).lowercased()
-                if trimmed == "localhost" || trimmed == "127.0.0.1" { return nil }
+                if isLocalhostResolver(trimmed) { return nil }
                 return s
             }
-            if let obj = entry as? [String: Any] {
+            if var obj = entry as? [String: Any] {
                 if let address = obj["address"] as? String {
                     let trimmed = address.trimmingCharacters(in: .whitespaces).lowercased()
-                    if trimmed == "localhost" || trimmed == "127.0.0.1" { return nil }
+                    if isLocalhostResolver(trimmed) { return nil }
+                }
+                if stripGeoRules {
+                    obj = stripGeoTokens(from: obj, key: "domains", prefix: "geosite:")
+                    obj = stripGeoTokens(from: obj, key: "domains", prefix: "geoip:")
                 }
                 return obj
             }
@@ -154,6 +165,14 @@ enum XrayNormalizer: JSONCoreNormalizer {
         return dnsObj
     }
 
+    private static func isLocalhostResolver(_ value: String) -> Bool {
+        value == "localhost"
+            || value == "127.0.0.1"
+            || value == "::1"
+            || value.hasPrefix("127.0.0.1:")
+            || value.hasPrefix("[::1]:")
+    }
+
     private static func sanitizeRouting(
         _ routing: [String: Any]?,
         outbounds: [[String: Any]],
@@ -162,6 +181,7 @@ enum XrayNormalizer: JSONCoreNormalizer {
         var routing = routing ?? [:]
         var rules = (routing["rules"] as? [[String: Any]]) ?? []
         let balancers = (routing["balancers"] as? [[String: Any]]) ?? []
+        let outboundTags = Set(outbounds.compactMap { $0["tag"] as? String })
         let fallbackOutbound = resolveProxyTag(from: outbounds) ?? "direct"
         // v2rayNG's getBalance() picks a balancer's live outbound at runtime
         // from its `selector` tag-prefix list (health-checked by observatory).
@@ -180,6 +200,14 @@ enum XrayNormalizer: JSONCoreNormalizer {
             if let balancerTag = copy["balancerTag"] as? String, !balancerTag.isEmpty {
                 copy.removeValue(forKey: "balancerTag")
                 copy["outboundTag"] = balancerOutbounds[balancerTag] ?? fallbackOutbound
+            }
+            if let outboundTag = copy["outboundTag"] as? String {
+                if outboundTag.isEmpty || !outboundTags.contains(outboundTag) {
+                    copy["outboundTag"] = fallbackOutbound
+                }
+            }
+            if copy["outboundTag"] == nil {
+                copy["outboundTag"] = fallbackOutbound
             }
 
             if stripGeoRules {
@@ -239,7 +267,22 @@ enum XrayNormalizer: JSONCoreNormalizer {
 
     private static func looksLikeCatchAll(_ rule: [String: Any]) -> Bool {
         let hasForward = rule["outboundTag"] != nil || rule["balancerTag"] != nil
-        return hasForward && !ruleHasSelectors(rule)
+        return hasForward && !ruleHasSelectorsExceptCatchAllNetwork(rule)
+    }
+
+    private static func ruleHasSelectorsExceptCatchAllNetwork(_ rule: [String: Any]) -> Bool {
+        var copy = rule
+        if let network = copy["network"] as? String {
+            let normalized = network
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                .filter { !$0.isEmpty }
+                .sorted()
+            if normalized == ["tcp", "udp"] {
+                copy.removeValue(forKey: "network")
+            }
+        }
+        return ruleHasSelectors(copy)
     }
 
     /// Maps each `balancers[].tag` to a single concrete outbound tag, honoring
@@ -274,9 +317,20 @@ enum XrayNormalizer: JSONCoreNormalizer {
 
     private static func resolveProxyTag(from outbounds: [[String: Any]]) -> String? {
         if outbounds.contains(where: { ($0["tag"] as? String) == "proxy" }) { return "proxy" }
+        if let proxyPrefix = outbounds.compactMap({ $0["tag"] as? String }).first(where: { $0.lowercased().hasPrefix("proxy-") }) {
+            return proxyPrefix
+        }
+        if let nonWhitelist = firstUsableOutboundTag(from: outbounds, skipWhitelist: true) {
+            return nonWhitelist
+        }
+        return firstUsableOutboundTag(from: outbounds, skipWhitelist: false)
+    }
+
+    private static func firstUsableOutboundTag(from outbounds: [[String: Any]], skipWhitelist: Bool) -> String? {
         for item in outbounds {
             guard let tag = item["tag"] as? String, !tag.isEmpty else { continue }
             let lower = tag.lowercased()
+            if skipWhitelist && lower.hasPrefix("whitelist-") { continue }
             if lower == "direct" || lower == "block" || lower == "dns_out" || lower == "dns-out" { continue }
             let proto = (item["protocol"] as? String)?.lowercased() ?? ""
             if proto == "freedom" || proto == "blackhole" { continue }

@@ -41,6 +41,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private var lastCoreType: CoreType = .xray
     private var lastUseZashboard = false
     private var geoStripped = false
+    private var startupStage: String?
     private var sessionStartedAt: Date?
     private var startWatchdog: DispatchWorkItem?
 
@@ -58,6 +59,51 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         return body()
     }
 
+    private static var lastErrorFileURL: URL {
+        ContainerPaths.containerURL.appendingPathComponent("last-core-error.txt")
+    }
+
+    private func updateStartupStage(_ message: String, log: Bool = true) {
+        withState { startupStage = message }
+        if log {
+            TunnelLogBuffer.shared.append(message)
+        }
+    }
+
+    private func recordCoreFailure(_ message: String) {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let final = trimmed.isEmpty ? "Core failed to start with an empty error." : trimmed
+        withState {
+            coreStarted = false
+            coreError = final
+            startupStage = final
+        }
+        Self.writeLastError(final)
+    }
+
+    private func clearPersistedCoreFailure() {
+        try? FileManager.default.removeItem(at: Self.lastErrorFileURL)
+    }
+
+    private static func writeLastError(_ message: String) {
+        let body = "\(ISO8601DateFormatter().string(from: Date()))\n\(String(message.prefix(4096)))"
+        do {
+            let url = lastErrorFileURL
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try body.data(using: .utf8)?.write(to: url, options: [.atomic])
+            TunnelLogBuffer.shared.append("lastError file saved: \(url.path)")
+        } catch {
+            TunnelLogBuffer.shared.append("lastError file write failed: \(error.localizedDescription)")
+        }
+    }
+
+    private static func readLastError() -> String? {
+        guard let data = try? Data(contentsOf: lastErrorFileURL),
+              let text = String(data: data, encoding: .utf8) else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         withState {
             coreStarted = false
@@ -65,8 +111,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             resourcesPathError = nil
             lastConfigContent = nil
             geoStripped = false
+            startupStage = "startTunnel begin"
             sessionStartedAt = Date()
         }
+        clearPersistedCoreFailure()
         withState { startWatchdog?.cancel(); startWatchdog = nil }
         TunnelLogBuffer.shared.append("startTunnel begin")
 
@@ -74,6 +122,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
         guard let payload = TunnelConfigPayload.decode(options: options, providerConfiguration: providerConfig) else {
             let msg = "missing configContent — start the tunnel from the app once"
+            recordCoreFailure(msg)
             TunnelLogBuffer.shared.append(msg)
             completionHandler(NSError(domain: "DecoderSec", code: -2, userInfo: [
                 NSLocalizedDescriptionKey: msg
@@ -86,17 +135,20 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             lastUseZashboard = payload.useZashboard
             lastConfigContent = payload.configContent
         }
-        TunnelLogBuffer.shared.append("payload core=\(payload.coreType.rawValue) zashboard=\(payload.useZashboard)")
+        updateStartupStage("startTunnel payload core=\(payload.coreType.rawValue) zashboard=\(payload.useZashboard) bytes=\(payload.configContent.utf8.count)")
 
         let configContent: String
         do {
             configContent = try prepareConfig(payload)
         } catch {
-            withState { coreError = error.localizedDescription }
-            TunnelLogBuffer.shared.append("prepareConfig failed: \(error.localizedDescription)")
+            let detail = Self.truncate(error.localizedDescription, maxLength: 200)
+            let message = "prepare failed: \(detail)"
+            recordCoreFailure(message)
+            TunnelLogBuffer.shared.append(message)
             completionHandler(error)
             return
         }
+        updateStartupStage("prepare result OK normalizedBytes=\(configContent.utf8.count)")
 
         let settings = Self.makeTunnelSettings(mtu: Self.tunnelMTU, dnsServers: payload.dnsServers)
         setTunnelNetworkSettings(settings) { [weak self] error in
@@ -107,11 +159,12 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
             if let error {
-                self.withState { self.coreError = error.localizedDescription }
+                self.recordCoreFailure("setTunnelNetworkSettings failed: \(error.localizedDescription)")
                 TunnelLogBuffer.shared.append("setTunnelNetworkSettings failed: \(error.localizedDescription)")
                 completionHandler(error)
                 return
             }
+            self.updateStartupStage("setTunnelNetworkSettings result OK")
 
             // Hand off to coreQueue immediately — see threading note above.
             self.coreQueue.async {
@@ -123,13 +176,16 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private func prepareConfig(_ payload: TunnelConfigPayload) throws -> String {
         // Node selection is already applied by the app via TunnelManager.effectiveContent.
         let raw = payload.configContent
+        updateStartupStage("prepare begin core=\(payload.coreType.rawValue) rawBytes=\(raw.utf8.count)")
         if payload.coreType == .xray {
             let dir = EVCore.resourcesURL(for: .xray)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            TunnelLogBuffer.shared.append("prepare resources path=\(dir.path)")
             if GeoResourceBootstrap.seedBundledGeoIfNeeded(into: dir) {
                 TunnelLogBuffer.shared.append("seeded bundled geo from appex")
             }
             let status = GeoResourceBootstrap.status(forConfig: raw, in: dir)
+            TunnelLogBuffer.shared.append("prepare geo status needsGeoip=\(status.needsGeoip) hasGeoip=\(status.hasGeoip) needsGeosite=\(status.needsGeosite) hasGeosite=\(status.hasGeosite) files=[\(GeoResourceBootstrap.fileReport(in: dir))]")
             let stripGeo = !status.isReady
             withState { geoStripped = stripGeo }
             if stripGeo, let missing = status.missingSummary {
@@ -151,8 +207,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             }
             // Always ios-safe (flatten balancer, strip DNS localhost) — Android keeps
             // observatory with balancers; we cannot run probes reliably inside NE.
+            TunnelLogBuffer.shared.append("prepare normalize try xray iosSafe=true stripGeoRules=\(stripGeo)")
             return try XrayNormalizer.normalize(raw, useZashboard: payload.useZashboard, stripGeoRules: stripGeo)
         }
+        TunnelLogBuffer.shared.append("prepare normalize try core=\(payload.coreType.rawValue)")
         return try ConfigNormalizer.normalize(raw, for: payload.coreType, useZashboard: payload.useZashboard)
     }
 
@@ -170,10 +228,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         configContent: String,
         completionHandler: @escaping (Error?) -> Void
     ) {
+        updateStartupStage("bootCore begin")
         let fd = TunnelFD.lookup(for: self.packetFlow)
         if fd < 0 {
             let msg = "could not obtain TUN file descriptor"
-            withState { coreError = msg }
+            recordCoreFailure(msg)
             TunnelLogBuffer.shared.append(msg)
             completionHandler(NSError(domain: "DecoderSec", code: -1, userInfo: [NSLocalizedDescriptionKey: msg]))
             return
@@ -181,14 +240,25 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         TunnelLogBuffer.shared.append("TUN fd=\(fd)")
 
         let resPath = EVCore.resourcesURL(for: payload.coreType).path
+        updateStartupStage("SetResourcesPath try path=\(resPath)")
+        if payload.coreType == .xray {
+            TunnelLogBuffer.shared.append("SetResourcesPath geo files [\(GeoResourceBootstrap.fileReport(in: EVCore.resourcesURL(for: .xray)))]")
+        }
         var resErr: NSError?
-        if !EvcoreSetResourcesPath(resPath, &resErr), let resErr {
-            withState { resourcesPathError = resErr.localizedDescription }
-            TunnelLogBuffer.shared.append("SetResourcesPath failed: \(resErr.localizedDescription)")
+        if !EvcoreSetResourcesPath(resPath, &resErr) {
+            let detail = Self.describeCoreError(resErr)
+            withState { resourcesPathError = detail }
+            TunnelLogBuffer.shared.append("SetResourcesPath result failed: \(detail)")
+        } else {
+            updateStartupStage("SetResourcesPath result OK path=\(resPath)")
         }
 
         var stopErr: NSError?
-        _ = EvcoreStopAll(&stopErr)
+        if !EvcoreStopAll(&stopErr) {
+            TunnelLogBuffer.shared.append("EvcoreStopAll before start failed: \(Self.describeCoreError(stopErr))")
+        } else {
+            TunnelLogBuffer.shared.append("EvcoreStopAll before start OK")
+        }
 
         let hazards = payload.coreType == .xray
             ? XrayNormalizer.iosHazards(in: payload.configContent)
@@ -216,20 +286,35 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         case .failed(let coreErr):
             let message = Self.describeCoreError(coreErr)
             let alreadyStripped = withState { geoStripped }
-            guard !alreadyStripped,
-                  payload.coreType == .xray,
-                  Self.looksLikeGeoCategoryFailure(message),
-                  let retryContent = try? XrayNormalizer.normalize(
-                      payload.configContent, useZashboard: payload.useZashboard, stripGeoRules: true
-                  ) else {
+            guard !alreadyStripped, payload.coreType == .xray else {
                 finishFailure(message: message, hazards: hazards, completionHandler: completionHandler)
                 return
             }
+            let retryContent: String
+            do {
+                TunnelLogBuffer.shared.append("prepare normalize retry xray iosSafe=true stripGeoRules=true")
+                retryContent = try XrayNormalizer.normalize(
+                    payload.configContent, useZashboard: payload.useZashboard, stripGeoRules: true
+                )
+            } catch {
+                let detail = Self.truncate(error.localizedDescription, maxLength: 200)
+                finishFailure(
+                    message: "\(message); geo-strip retry normalize failed: \(detail)",
+                    hazards: hazards,
+                    completionHandler: completionHandler
+                )
+                return
+            }
 
-            TunnelLogBuffer.shared.append("EvcoreStartCore failed (\(message)) — retrying with geo rules stripped")
+            let retryReason = Self.looksLikeGeoCategoryFailure(message) ? "geo category failure" : "first xray failure"
+            TunnelLogBuffer.shared.append("EvcoreStartCore result failed (\(message)) — retrying with geo rules stripped (\(retryReason))")
             withState { geoStripped = true }
             var retryStopErr: NSError?
-            _ = EvcoreStopAll(&retryStopErr)
+            if !EvcoreStopAll(&retryStopErr) {
+                TunnelLogBuffer.shared.append("EvcoreStopAll before geo-strip retry failed: \(Self.describeCoreError(retryStopErr))")
+            } else {
+                TunnelLogBuffer.shared.append("EvcoreStopAll before geo-strip retry OK")
+            }
 
             let retryOutcome = attemptStart(
                 coreTypeRaw: payload.coreType.rawValue,
@@ -270,37 +355,58 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let watchdog = DispatchWorkItem { [weak self] in
             guard finishState.markFinished() else { return }
             guard let self else { return }
-            TunnelLogBuffer.shared.append("EvcoreStartCore watchdog \(Int(timeoutSeconds))s — aborting hung start")
-            self.withState {
-                self.coreStarted = false
-                self.coreError = "Core start timed out (\(Int(timeoutSeconds))s). Happ balancer/observatory/DNS localhost — reconnect after update."
-            }
-            var stopErr: NSError?
-            _ = EvcoreStopAll(&stopErr)
+            let message = "EvcoreStartCore watchdog \(Int(timeoutSeconds))s — start hung after prepare/SetResourcesPath; Happ balancer/observatory/DNS localhost or Xray init may be blocking."
+            TunnelLogBuffer.shared.append(message)
+            self.recordCoreFailure(message)
             completionHandler(nil)
+            DispatchQueue.global(qos: .utility).async {
+                var stopErr: NSError?
+                if !EvcoreStopAll(&stopErr) {
+                    TunnelLogBuffer.shared.append("EvcoreStopAll after watchdog failed: \(Self.describeCoreError(stopErr))")
+                } else {
+                    TunnelLogBuffer.shared.append("EvcoreStopAll after watchdog requested")
+                }
+            }
         }
         withState { startWatchdog = watchdog }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeoutSeconds, execute: watchdog)
 
-        TunnelLogBuffer.shared.append("EvcoreStartCore (\(content.utf8.count) bytes)")
+        updateStartupStage("EvcoreStartCore try core=\(coreTypeRaw) bytes=\(content.utf8.count) fd=\(fd) mtu=\(Self.tunnelMTU)")
         var coreErr: NSError?
         let started = EvcoreStartCore(coreTypeRaw, content, Int(fd), Self.tunnelMTU, &coreErr)
 
         watchdog.cancel()
         withState { startWatchdog = nil }
         guard finishState.markFinished() else {
-            TunnelLogBuffer.shared.append("EvcoreStartCore returned after watchdog — ignored")
+            TunnelLogBuffer.shared.append("EvcoreStartCore result late started=\(started) error=\(Self.describeCoreError(coreErr)) — ignored")
             return .timedOut
         }
-        return started ? .started : .failed(coreErr)
+        if started {
+            withState {
+                coreStarted = true
+                coreError = nil
+                startupStage = "EvcoreStartCore result OK"
+            }
+            clearPersistedCoreFailure()
+            TunnelLogBuffer.shared.append("EvcoreStartCore result OK")
+            return .started
+        }
+
+        let message = "EvcoreStartCore result failed: \(Self.describeCoreError(coreErr))"
+        recordCoreFailure(message)
+        TunnelLogBuffer.shared.append(message)
+        return .failed(coreErr)
     }
 
     private func finishSuccess(completionHandler: @escaping (Error?) -> Void) {
         withState {
             coreStarted = true
             coreError = nil
+            startupStage = "Core running"
         }
+        clearPersistedCoreFailure()
         TunnelLogBuffer.shared.append("EvcoreStartCore OK")
+        TunnelLogBuffer.shared.append("EvcoreStartCore verify: no EverywhereCore isRunning API; treating successful return as running")
         startPathMonitor()
         completionHandler(nil)
     }
@@ -313,11 +419,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         if !hazards.isEmpty {
             message += " [hazards: \(hazards.joined(separator: ","))]"
         }
-        withState {
-            coreStarted = false
-            coreError = message
-        }
-        TunnelLogBuffer.shared.append("EvcoreStartCore failed: \(message)")
+        recordCoreFailure(message)
+        TunnelLogBuffer.shared.append("EvcoreStartCore result failed final: \(message)")
         completionHandler(nil)
     }
 
@@ -418,18 +521,24 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 coreType: lastCoreType,
                 sessionStartedAt: sessionStartedAt,
                 configContent: lastConfigContent,
-                geoStripped: geoStripped
+                geoStripped: geoStripped,
+                startupStage: startupStage
             )
         }
+        let persistedError = Self.readLastError()
 
         var payload: [String: Any] = [
             "running": snapshot.started,
             "geoStripped": snapshot.geoStripped,
+            "lastErrorFile": Self.lastErrorFileURL.path,
         ]
         if let err = snapshot.error, !err.isEmpty {
             payload["error"] = err
-        } else if !snapshot.started {
-            payload["error"] = "Core is not running."
+        } else if let persistedError, !snapshot.started {
+            payload["error"] = persistedError
+        }
+        if let stage = snapshot.startupStage, !stage.isEmpty {
+            payload["startupStage"] = stage
         }
         payload["resourcesPath"] = EVCore.resourcesURL(for: snapshot.coreType).path
         if let resourcesPathError = snapshot.resourcesPathError {
@@ -495,10 +604,28 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private static func describeCoreError(_ error: NSError?) -> String {
-        guard let error else { return "Core failed to start." }
+        guard let error else { return "Core failed to start: EvcoreStartCore returned false without NSError." }
         let text = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty { return text }
-        return "Core failed to start (domain \(error.domain), code \(error.code))."
+        var parts = [
+            "domain=\(error.domain)",
+            "code=\(error.code)",
+        ]
+        if !text.isEmpty {
+            parts.append("description=\(text)")
+        }
+        if !error.userInfo.isEmpty {
+            let info = error.userInfo
+                .map { key, value in "\(key)=\(String(describing: value))" }
+                .sorted()
+                .joined(separator: "; ")
+            parts.append("userInfo={\(info)}")
+        }
+        return "Core failed to start (\(parts.joined(separator: ", ")))"
+    }
+
+    private static func truncate(_ text: String, maxLength: Int) -> String {
+        guard text.count > maxLength else { return text }
+        return "\(text.prefix(maxLength))..."
     }
 
     private static func makeTunnelSettings(mtu: Int, dnsServers: [String]) -> NEPacketTunnelNetworkSettings {

@@ -111,7 +111,7 @@ struct SettingsView: View {
                     HStack {
                         Text(String(localized: "Version"))
                         Spacer()
-                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                        Text(appVersionText)
                             .font(Brand.Font.mono(12))
                             .foregroundStyle(Brand.Color.secondaryText)
                     }
@@ -128,6 +128,16 @@ struct SettingsView: View {
             }
         }
         .navigationViewStyle(.stack)
+    }
+
+    private var appVersionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "-"
+        let build = info?["CFBundleVersion"] as? String
+        if let build, !build.isEmpty {
+            return "\(version) (\(build))"
+        }
+        return version
     }
 }
 

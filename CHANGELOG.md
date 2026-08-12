@@ -4,6 +4,31 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.33] — 2026-08-12
+
+### Root cause
+- **Watchdog cleanup could block before publishing the failure.** beta.32's watchdog set `coreError`,
+  then synchronously called `EvcoreStopAll` before completing the NE start. `EverywhereCore.StartCore`
+  holds its singleton mutex while booting Xray; if Xray wedged in `core.StartInstance`, the watchdog's
+  StopAll could block behind that mutex and leave the app with a connected tunnel but no concrete error.
+- **The geo-strip retry was not fully geo-free.** Routing `geosite:`/`geoip:` tokens were stripped, but
+  DNS server `domains` could still contain `geosite:` entries. Xray treats missing geo categories as a
+  hard config load failure, so the retry could fail with the same class of error.
+
+### Fixed
+- Packet Tunnel now logs `startTunnel` → `prepare` → `SetResourcesPath` → `EvcoreStartCore try/result`
+  with geo file presence and byte sizes.
+- Every failed start writes the concrete last error to `last-core-error.txt` in the extension container;
+  Diagnostics includes that persisted error and file path if in-memory state or the log ring races.
+- `EvcoreStartCore` false results now record full NSError `domain`, `code`, and `userInfo` in both
+  Log console and Diagnostics.
+- Watchdog completion now reaches iOS before any cleanup `EvcoreStopAll` attempt, so a hung Go mutex
+  cannot hide the timeout cause.
+- Happ/Xray retry now strips geo tokens from both routing rules and DNS server domains, retries once
+  on the first Xray failure even when the core error text is incomplete, adds a valid `direct` fallback
+  outbound, and rewrites rules that point to missing outbound tags.
+- Settings shows `version (build)` and the build number is bumped to `33`.
+
 ## [0.1.0-beta.32] — 2026-08-12
 
 ### Root cause (Android/v2rayNG + Xray-core research)

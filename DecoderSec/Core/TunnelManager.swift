@@ -13,6 +13,8 @@ import NetworkExtension
 struct TunnelDiagnosticsSnapshot: Equatable {
     var coreRunning: Bool
     var coreError: String?
+    var startupStage: String?
+    var lastErrorFile: String?
     var resourcesPath: String?
     var resourcesPathError: String?
     var geoNeedsGeoip: Bool
@@ -26,6 +28,8 @@ struct TunnelDiagnosticsSnapshot: Equatable {
     static let empty = TunnelDiagnosticsSnapshot(
         coreRunning: false,
         coreError: nil,
+        startupStage: nil,
+        lastErrorFile: nil,
         resourcesPath: nil,
         resourcesPathError: nil,
         geoNeedsGeoip: false,
@@ -196,6 +200,8 @@ final class TunnelManager: ObservableObject {
             self.tunnelDiagnostics = TunnelDiagnosticsSnapshot(
                 coreRunning: running,
                 coreError: error,
+                startupStage: json["startupStage"] as? String,
+                lastErrorFile: json["lastErrorFile"] as? String,
                 resourcesPath: json["resourcesPath"] as? String,
                 resourcesPathError: json["resourcesPathError"] as? String,
                 geoNeedsGeoip: json["geoNeedsGeoip"] as? Bool ?? false,

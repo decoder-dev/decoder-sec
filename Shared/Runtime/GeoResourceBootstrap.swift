@@ -43,6 +43,17 @@ enum GeoResourceBootstrap {
         )
     }
 
+    static func fileReport(in directory: URL) -> String {
+        [geoipFileName, geositeFileName].map { name in
+            let url = directory.appendingPathComponent(name)
+            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value
+            if let size {
+                return "\(name)=present(\(size) bytes)"
+            }
+            return "\(name)=missing"
+        }.joined(separator: ", ")
+    }
+
     static func ensurePresentBlocking(forConfig configJSON: String, in directory: URL) throws {
         let snapshot = status(forConfig: configJSON, in: directory)
         guard !snapshot.isReady else { return }

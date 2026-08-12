@@ -15,6 +15,12 @@ struct DiagnosticsView: View {
                 row(String(localized: "VPN status"), vpnStatusText)
                 row(String(localized: "Core running"), boolText(tunnel.coreRunning))
                 row(String(localized: "Last error"), displayedCoreError)
+                if let stage = tunnel.tunnelDiagnostics.startupStage, !stage.isEmpty {
+                    row(String(localized: "Core startup"), stage)
+                }
+                if let path = tunnel.tunnelDiagnostics.lastErrorFile, !path.isEmpty {
+                    row(String(localized: "Last error file"), path)
+                }
                 if let seconds = tunnel.tunnelDiagnostics.sessionSeconds {
                     row(String(localized: "Session"), "\(seconds)s")
                 }
@@ -128,8 +134,13 @@ struct DiagnosticsView: View {
            }) {
             return line
         }
+        if tunnel.status == .connected, !tunnel.coreRunning,
+           let stage = tunnel.tunnelDiagnostics.startupStage,
+           !stage.isEmpty {
+            return stage
+        }
         if tunnel.status == .connected, !tunnel.coreRunning {
-            return String(localized: "Core did not start — open Log console")
+            return String(localized: "Core startup state unavailable — tap Refresh core status")
         }
         return "—"
     }
