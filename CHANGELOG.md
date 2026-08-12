@@ -17,6 +17,13 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.13] — 2026-08-12
+
+### Changed
+- Полный rewrite начат: структурная перекладка проекта по слоям (`App/Core/Features/UI`, `Shared/Domain/Persistence/Runtime`)
+- Введён единый typed-контракт `TunnelConfigPayload` между приложением и PacketTunnel (без смены wire-format)
+- Добавлен blueprint миграции: `docs/REWRITE_BLUEPRINT.md`
+
 ## [0.1.0-beta.12] — 2026-08-12
 
 ### Added

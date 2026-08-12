@@ -55,8 +55,8 @@
 		D5C4C0015C4C000000000001 /* Exceptions for "Shared" folder in "DecoderSecTunnel" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Configuration.swift,
-				PersistenceController.swift,
+				Domain/Configuration.swift,
+				Persistence/PersistenceController.swift,
 				DeepLink/DeviceIdentity.swift,
 				DeepLink/HappDeepLink.swift,
 				DeepLink/RoutingProfileStore.swift,
