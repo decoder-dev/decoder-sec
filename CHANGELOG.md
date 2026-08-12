@@ -4,6 +4,16 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.29] — 2026-08-12
+
+### Added
+- **Bundled geo в Packet Tunnel** (паттерн v2rayNG/Happ): `ThirdParty/geo/` → seed в extension container до `EvcoreStartCore`
+- `Scripts/fetch_geo.sh` — roscomvpn geo для CI/local build
+
+### Fixed
+- **XrayNormalizer** — strip geo для `domain`/`ip` как string (Happ routing rules)
+- Ядро должно стартовать с geosite/geoip без ожидания CDN на первом connect
+
 ## [0.1.0-beta.28] — 2026-08-12
 
 ### Changed

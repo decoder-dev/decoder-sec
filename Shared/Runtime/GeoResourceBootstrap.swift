@@ -81,6 +81,27 @@ enum GeoResourceBootstrap {
         }
     }
 
+    /// Copy bundled geo from the appex Resources/geo/ folder (v2rayNG `initAssets` pattern).
+    @discardableResult
+    static func seedBundledGeoIfNeeded(into directory: URL) -> Bool {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        var copied = false
+        for name in [geoipFileName, geositeFileName] {
+            let dest = directory.appendingPathComponent(name)
+            guard !fm.fileExists(atPath: dest.path) else { continue }
+            guard let bundled = Bundle.main.url(forResource: name, withExtension: nil, subdirectory: "geo")
+                ?? Bundle.main.url(forResource: name, withExtension: nil) else { continue }
+            do {
+                try fm.copyItem(at: bundled, to: dest)
+                copied = true
+            } catch {
+                continue
+            }
+        }
+        return copied
+    }
+
     static func referencesGeoip(_ configJSON: String) -> Bool {
         if routingRuleValues(in: configJSON, keys: ["ip"]).contains(where: isGeoipToken) {
             return true

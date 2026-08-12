@@ -12,6 +12,8 @@ require 'xcodeproj'
 PROJECT_PATH       = File.expand_path('../DecoderSec.xcodeproj', __dir__)
 DASHBOARD_REL_PATH = 'ThirdParty/zashboard'
 DASHBOARD_NAME     = 'zashboard'
+GEO_REL_PATH       = 'ThirdParty/geo'
+GEO_NAME           = 'geo'
 DEPLOYMENT_TARGET  = '15.0'
 SHARED_FOLDER      = 'Shared'
 
@@ -234,6 +236,32 @@ unless app_target.resources_build_phase.files.any? { |bf| bf.file_ref == dashboa
   app_target.resources_build_phase.add_file_reference(dashboard_ref)
 end
 
+# --- geo folder (bundled into Packet Tunnel — v2rayNG/Happ pattern) ----
+project.files.select { |f|
+  next false unless f.path
+  File.basename(f.path) == GEO_NAME && f.path != GEO_REL_PATH
+}.each do |stale|
+  project.targets.each do |t|
+    t.resources_build_phase.files.select { |bf| bf.file_ref == stale }.each do |bf|
+      t.resources_build_phase.files.delete(bf)
+    end
+  end
+  stale.remove_from_project
+end
+
+geo_ref = project.main_group.files.find { |f| f.path == GEO_REL_PATH }
+unless geo_ref
+  geo_ref = project.new(Xcodeproj::Project::Object::PBXFileReference)
+  geo_ref.path = GEO_REL_PATH
+  geo_ref.name = GEO_NAME
+  geo_ref.source_tree = 'SOURCE_ROOT'
+  geo_ref.last_known_file_type = 'folder'
+  project.main_group << geo_ref
+end
+unless ne_target.resources_build_phase.files.any? { |bf| bf.file_ref == geo_ref }
+  ne_target.resources_build_phase.add_file_reference(geo_ref)
+end
+
 # --- Shared/ synced root group (both targets compile its sources) --------
 # Sources that both the host app and the Network Extension need —
 # Core Data stack, AppGroup helper, ConfigNormalizer, etc. — live in
@@ -257,4 +285,4 @@ end
 end
 
 project.save
-puts "Wired EverywhereCore (>= #{EVERYWHERE_CORE_MIN_VERSION}, SwiftPM) + Runestone + zashboard into #{PROJECT_PATH}"
+puts "Wired EverywhereCore (>= #{EVERYWHERE_CORE_MIN_VERSION}, SwiftPM) + Runestone + zashboard + geo into #{PROJECT_PATH}"

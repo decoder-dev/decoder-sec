@@ -135,6 +135,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         if payload.coreType == .xray {
             let dir = EVCore.resourcesURL(for: .xray)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            if GeoResourceBootstrap.seedBundledGeoIfNeeded(into: dir) {
+                TunnelLogBuffer.shared.append("seeded bundled geo from appex")
+            }
             let status = GeoResourceBootstrap.status(forConfig: raw, in: dir)
             let stripGeo = !status.isReady
             geoStripped = stripGeo

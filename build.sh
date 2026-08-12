@@ -14,6 +14,12 @@ cd "$ROOT"
 # wire_project.rb needs the xcodeproj gem; install it (user dir, no sudo) if absent.
 ruby -e "require 'xcodeproj'" 2>/dev/null || gem install --user-install xcodeproj
 
+# Bundled geo for Packet Tunnel (Android v2rayNG initAssets pattern).
+chmod +x Scripts/fetch_geo.sh 2>/dev/null || true
+if [[ ! -f ThirdParty/geo/geoip.dat || ! -f ThirdParty/geo/geosite.dat ]]; then
+  Scripts/fetch_geo.sh
+fi
+
 ruby Scripts/wire_project.rb
 
 if [[ "${1:-}" == "--build-app" ]]; then

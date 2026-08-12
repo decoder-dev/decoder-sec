@@ -43,7 +43,7 @@ We do **not** raise the floor to iOS 26-only — that would lock out most sidelo
 ### 5 — Tunnel hardening (beta.26+)
 - [x] Architecture scheme — [`docs/TUNNEL_SCHEME.md`](TUNNEL_SCHEME.md)
 - [x] Lifecycle phases, config size guard, parse-based geo detection
-- [ ] Bundled geo in appex / auto-reconnect after geo download *(P1)*
+- [x] Bundled geo in appex / auto-reconnect after geo download *(P1 — beta.29)*
 
 ## Design north star
 

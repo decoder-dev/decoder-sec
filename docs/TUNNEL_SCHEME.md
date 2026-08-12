@@ -168,8 +168,8 @@ Polling: `TunnelManager.refreshCoreStatus` / `captureStartupFailureReason` с ba
 
 ### P1
 
-- [ ] Bundled minimal `geoip.dat` / `geosite.dat` в `DecoderSecTunnel` target (copy on first run).
-- [ ] Auto-reconnect когда фоновая geo-загрузка завершилась и `geoStripped` был true.
+- [x] Bundled minimal `geoip.dat` / `geosite.dat` в `DecoderSecTunnel` target (copy on first run).
+- [x] Auto-reconnect когда фоновая geo-загрузка завершилась и `geoStripped` был true.
 - [ ] App Group **только** для `Resources/` (опционально, product decision).
 
 ### P2
@@ -186,7 +186,16 @@ Polling: `TunnelManager.refreshCoreStatus` / `captureStartupFailureReason` с ba
 | [happwn](https://github.com/useruserdev/happwn) | crypt5 decrypt, HWID headers, subscription resolver |
 | sing-box-for-apple | TunnelFD retry, utun selection |
 
-## 10. Файловая карта
+## 11. Android reference (Happ / v2rayNG)
+
+| Client | Geo strategy | Lesson for iOS |
+|--------|--------------|----------------|
+| **Happ** | Pre-installed geo in app; routing profile has `Geoipurl` / `Geositeurl` for updates | Geo must exist **before** core start — not optional CDN on first connect |
+| **v2rayNG** | `geoip.dat` / `geosite.dat` in APK assets → `SettingsManager.initAssets()` copies to app data on first launch | Same: bundle in appex, `seedBundledGeoIfNeeded` into extension container |
+| **decoder sec.** (beta.29+) | `ThirdParty/geo/` in Packet Tunnel bundle, roscomvpn lists | Strip geo only when bundled + container both miss files |
+
+Upstream [Everywhere](https://github.com/NodePassProject/Everywhere) uses App Group + user-managed Resources — we keep inline config but adopted Android-style **bundled geo seed**.
+
 
 ```
 Shared/Tunnel/TunnelConfigPayload.swift   — wire contract + size guard

@@ -115,14 +115,8 @@ enum XrayNormalizer: JSONCoreNormalizer {
             }
 
             if stripGeoRules {
-                if var domains = copy["domain"] as? [Any] {
-                    domains = domains.filter { ($0 as? String)?.lowercased().hasPrefix("geosite:") != true }
-                    if domains.isEmpty { copy.removeValue(forKey: "domain") } else { copy["domain"] = domains }
-                }
-                if var ips = copy["ip"] as? [Any] {
-                    ips = ips.filter { ($0 as? String)?.lowercased().hasPrefix("geoip:") != true }
-                    if ips.isEmpty { copy.removeValue(forKey: "ip") } else { copy["ip"] = ips }
-                }
+                copy = stripGeoTokens(from: copy, key: "domain", prefix: "geosite:")
+                copy = stripGeoTokens(from: copy, key: "ip", prefix: "geoip:")
             }
 
             guard ruleHasSelectors(copy) || copy["outboundTag"] != nil else { return nil }
@@ -146,14 +140,33 @@ enum XrayNormalizer: JSONCoreNormalizer {
     }
 
     private static func ruleHasSelectors(_ rule: [String: Any]) -> Bool {
-        let hasDomain = (rule["domain"] as? [Any])?.isEmpty == false
-        let hasIP = (rule["ip"] as? [Any])?.isEmpty == false
+        let hasDomain = hasSelectorValue(rule["domain"])
+        let hasIP = hasSelectorValue(rule["ip"])
         let hasPort = rule["port"] != nil
         let hasProtocol = rule["protocol"] != nil
         let hasNetwork = rule["network"] != nil
         let hasProcess = rule["process"] != nil
         let hasUser = rule["user"] != nil
         return hasDomain || hasIP || hasPort || hasProtocol || hasNetwork || hasProcess || hasUser
+    }
+
+    private static func hasSelectorValue(_ value: Any?) -> Bool {
+        if let arr = value as? [Any], !arr.isEmpty { return true }
+        if let s = value as? String, !s.isEmpty { return true }
+        return false
+    }
+
+    private static func stripGeoTokens(from rule: [String: Any], key: String, prefix: String) -> [String: Any] {
+        var copy = rule
+        if let values = copy[key] as? [Any] {
+            let filtered = values.compactMap { $0 as? String }.filter { !$0.lowercased().hasPrefix(prefix) }
+            if filtered.isEmpty { copy.removeValue(forKey: key) } else { copy[key] = filtered }
+        } else if let single = copy[key] as? String {
+            if single.lowercased().hasPrefix(prefix) {
+                copy.removeValue(forKey: key)
+            }
+        }
+        return copy
     }
 
     private static func looksLikeCatchAll(_ rule: [String: Any]) -> Bool {
