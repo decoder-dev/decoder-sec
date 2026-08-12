@@ -158,6 +158,11 @@ Polling: `TunnelManager.refreshCoreStatus` / `captureStartupFailureReason` с ba
 
 ## 8. Приоритеты доработок
 
+### P0 (beta.37)
+
+- [x] Tier-3 **minimal boot**: if ios-safe + geo-strip fail/hang, extract ≤3 proxy outbounds into a
+      known-good tun+DNS+catch-all skeleton so `EvcoreStartCore` still succeeds when ≥1 outbound parses.
+
 ### P0 (beta.32)
 
 - [x] `EvcoreStartCore`/`SetResourcesPath`/`StopAll` на отдельном `coreQueue` — `handleAppMessage`
