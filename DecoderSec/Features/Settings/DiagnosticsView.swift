@@ -13,7 +13,18 @@ struct DiagnosticsView: View {
             Section("Tunnel") {
                 row("VPN status", vpnStatusText)
                 row("Core running", tunnel.coreRunning ? "yes" : "no")
-                row("Last error", tunnel.lastError ?? "—")
+                row("Last error", displayedCoreError)
+            }
+
+            Section("Geo resources") {
+                row("Needs geoip.dat", geoRow(tunnel.tunnelDiagnostics.geoNeedsGeoip, tunnel.tunnelDiagnostics.geoHasGeoip))
+                row("Needs geosite.dat", geoRow(tunnel.tunnelDiagnostics.geoNeedsGeosite, tunnel.tunnelDiagnostics.geoHasGeosite))
+                if let path = tunnel.tunnelDiagnostics.resourcesPath {
+                    row("Extension resources path", path)
+                }
+                if let err = tunnel.tunnelDiagnostics.resourcesPathError {
+                    row("Resources path error", err)
+                }
             }
 
             Section("Routing") {
@@ -30,9 +41,15 @@ struct DiagnosticsView: View {
                 row("Has catch-all", snapshot?.hasCatchAll == true ? "yes" : "no")
                 row("Has balancer", snapshot?.hasBalancer == true ? "yes" : "no")
                 row("DNS servers", snapshot?.dnsServers.joined(separator: ", ") ?? "—")
+                row("Uses geosite/geoip", snapshot?.usesGeoRules == true ? "yes" : "no")
             }
 
             Section("Actions") {
+                Button("Refresh core status") {
+                    tunnel.refreshCoreStatus(retries: 3)
+                    note = "Requested tunnel diagnostics."
+                }
+
                 Button("Re-apply Happ routing to active Xray") {
                     reapplyRouting()
                 }
@@ -58,6 +75,22 @@ struct DiagnosticsView: View {
         }
         .navigationTitle("Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if tunnel.status == .connected {
+                tunnel.refreshCoreStatus(retries: 3)
+            }
+        }
+    }
+
+    private var displayedCoreError: String {
+        if let err = tunnel.tunnelDiagnostics.coreError, !err.isEmpty { return err }
+        if let err = tunnel.lastError, !err.isEmpty { return err }
+        return "—"
+    }
+
+    private func geoRow(_ needed: Bool, _ present: Bool) -> String {
+        if !needed { return "not required" }
+        return present ? "present" : "missing (auto-download on connect)"
     }
 
     private var activeXray: Configuration? {
@@ -122,6 +155,7 @@ private struct XraySnapshot {
     var hasCatchAll: Bool
     var hasBalancer: Bool
     var dnsServers: [String]
+    var usesGeoRules: Bool
 
     static func from(json: String) -> XraySnapshot? {
         guard let data = json.data(using: .utf8),
@@ -154,7 +188,8 @@ private struct XraySnapshot {
             routingRuleCount: rules.count,
             hasCatchAll: hasCatchAll,
             hasBalancer: hasBalancer,
-            dnsServers: dns
+            dnsServers: dns,
+            usesGeoRules: json.contains("geosite:") || json.contains("geoip:")
         )
     }
 

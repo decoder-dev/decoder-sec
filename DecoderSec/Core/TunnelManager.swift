@@ -10,6 +10,28 @@ import Combine
 import Foundation
 import NetworkExtension
 
+struct TunnelDiagnosticsSnapshot: Equatable {
+    var coreRunning: Bool
+    var coreError: String?
+    var resourcesPath: String?
+    var resourcesPathError: String?
+    var geoNeedsGeoip: Bool
+    var geoNeedsGeosite: Bool
+    var geoHasGeoip: Bool
+    var geoHasGeosite: Bool
+
+    static let empty = TunnelDiagnosticsSnapshot(
+        coreRunning: false,
+        coreError: nil,
+        resourcesPath: nil,
+        resourcesPathError: nil,
+        geoNeedsGeoip: false,
+        geoNeedsGeosite: false,
+        geoHasGeoip: false,
+        geoHasGeosite: false
+    )
+}
+
 final class TunnelManager: ObservableObject {
     static let shared = TunnelManager()
 
@@ -17,6 +39,7 @@ final class TunnelManager: ObservableObject {
     @Published private(set) var isReady: Bool = false
     @Published private(set) var coreRunning: Bool = false
     @Published private(set) var lastError: String?
+    @Published private(set) var tunnelDiagnostics: TunnelDiagnosticsSnapshot = .empty
     @Published private(set) var pendingReconnect: Bool = false
     private var manager: NETunnelProviderManager?
     private var statusObserver: AnyCancellable?
@@ -42,7 +65,7 @@ final class TunnelManager: ObservableObject {
             self.isReady = true
             if m.connection.status == .connected {
                 self.didConnect = true
-                queryCoreStatus()
+                refreshCoreStatus(retries: 3)
             }
         } catch {
             self.lastError = Self.userFacingError(error)
@@ -58,6 +81,8 @@ final class TunnelManager: ObservableObject {
         do {
             if on {
                 didConnect = false
+                coreRunning = false
+                tunnelDiagnostics = .empty
                 let m = try await ensureManager(configuration: configuration)
                 let payload = TunnelConfigPayload(
                     configContent: configuration.content,
@@ -69,11 +94,14 @@ final class TunnelManager: ObservableObject {
                 try m.connection.startVPNTunnel(options: payload.asStartOptions)
             } else {
                 pendingReconnect = false
+                coreRunning = false
+                tunnelDiagnostics = .empty
                 try await disableTunnel()
+                lastError = nil
             }
-            lastError = nil
         } catch {
             lastError = Self.userFacingError(error)
+            coreRunning = false
         }
     }
 
@@ -115,12 +143,38 @@ final class TunnelManager: ObservableObject {
         lastError = nil
     }
 
+    func refreshCoreStatus(retries: Int = 1) {
+        queryTunnelMessage(type: "diagnostics", retries: retries) { [weak self] json in
+            guard let self else { return }
+            let running = json["running"] as? Bool ?? false
+            let error = json["error"] as? String
+            self.coreRunning = running
+            if let error, !error.isEmpty {
+                self.lastError = error
+            } else if running {
+                self.lastError = nil
+            }
+            self.tunnelDiagnostics = TunnelDiagnosticsSnapshot(
+                coreRunning: running,
+                coreError: error,
+                resourcesPath: json["resourcesPath"] as? String,
+                resourcesPathError: json["resourcesPathError"] as? String,
+                geoNeedsGeoip: json["geoNeedsGeoip"] as? Bool ?? false,
+                geoNeedsGeosite: json["geoNeedsGeosite"] as? Bool ?? false,
+                geoHasGeoip: json["geoHasGeoip"] as? Bool ?? false,
+                geoHasGeosite: json["geoHasGeosite"] as? Bool ?? false
+            )
+            if self.status == .connected, !running {
+                Task { try? await self.disableTunnel() }
+            }
+        }
+    }
+
     private func ensureManager(configuration: Configuration) async throws -> NETunnelProviderManager {
         let m = manager ?? NETunnelProviderManager()
         let proto = (m.protocolConfiguration as? NETunnelProviderProtocol) ?? NETunnelProviderProtocol()
         proto.providerBundleIdentifier = EVCore.Identifier.networkExtension
         proto.serverAddress = BrandIdentity.displayName
-        // Full payload so NE (and on-demand restarts) need no shared store.
         proto.providerConfiguration = TunnelConfigPayload(
             configContent: configuration.content,
             configID: configuration.id.uuidString,
@@ -155,7 +209,7 @@ final class TunnelManager: ObservableObject {
         manager = m
         return m
     }
-    
+
     private func disableTunnel() async throws {
         guard let m = manager else { return }
         if m.isOnDemandEnabled {
@@ -179,9 +233,10 @@ final class TunnelManager: ObservableObject {
                 self.trackConnectFailures(previous: previous, current: connection.status)
                 if connection.status == .connected {
                     self.didConnect = true
-                    self.queryCoreStatus()
+                    self.refreshCoreStatus(retries: 3)
                 } else {
                     self.coreRunning = false
+                    self.tunnelDiagnostics = .empty
                     if (connection.status == .disconnected || connection.status == .invalid)
                         && self.pendingReconnect {
                         self.pendingReconnect = false
@@ -192,7 +247,7 @@ final class TunnelManager: ObservableObject {
                 }
             }
     }
-    
+
     private func trackConnectFailures(previous: NEVPNStatus, current: NEVPNStatus) {
         guard !didConnect,
               let m = manager, m.isOnDemandEnabled,
@@ -217,7 +272,7 @@ final class TunnelManager: ObservableObject {
             }
         }
     }
-    
+
     private func forceReset() async {
         pendingReconnect = false
         do {
@@ -229,29 +284,28 @@ final class TunnelManager: ObservableObject {
             lastError = Self.userFacingError(error)
         }
     }
-    
-    private func queryCoreStatus() {
+
+    private func queryTunnelMessage(type: String, retries: Int, handler: @escaping ([String: Any]) -> Void) {
         guard let session = manager?.connection as? NETunnelProviderSession else { return }
-        let message: [String: Any] = ["type": "core-status"]
+        let message: [String: Any] = ["type": type]
         guard let data = try? JSONSerialization.data(withJSONObject: message) else { return }
-        try? session.sendProviderMessage(data) { [weak self] response in
-            guard let self,
-                  let response,
-                  let json = try? JSONSerialization.jsonObject(with: response) as? [String: Any]
-            else { return }
-            let running = json["running"] as? Bool ?? true
-            let error = json["error"] as? String
-            DispatchQueue.main.async {
-                guard self.status == .connected else { return }
-                if running {
-                    self.coreRunning = true
-                } else {
-                    self.coreRunning = false
-                    self.lastError = error ?? "Core failed to start."
-                    Task { try? await self.disableTunnel() }
+
+        func attempt(remaining: Int, delaySeconds: Double) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds) {
+                try? session.sendProviderMessage(data) { response in
+                    if let response,
+                       let json = try? JSONSerialization.jsonObject(with: response) as? [String: Any] {
+                        DispatchQueue.main.async { handler(json) }
+                        return
+                    }
+                    if remaining > 1 {
+                        attempt(remaining: remaining - 1, delaySeconds: 0.6)
+                    }
                 }
             }
         }
+
+        attempt(remaining: max(1, retries), delaySeconds: 0.35)
     }
 
     private static func userFacingError(_ error: Error) -> String {

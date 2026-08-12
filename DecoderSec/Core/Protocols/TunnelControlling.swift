@@ -22,4 +22,5 @@ protocol TunnelControlling: AnyObject, ObservableObject {
     func reconnect() async
     func applyAlwaysOn(_ enabled: Bool) async
     func clearLastError()
+    func refreshCoreStatus(retries: Int)
 }

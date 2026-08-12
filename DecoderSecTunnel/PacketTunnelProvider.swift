@@ -14,7 +14,9 @@ import NetworkExtension
 final class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let tunnelMTU = 1500
 
+    private var coreStarted = false
     private var coreError: String?
+    private var resourcesPathError: String?
 
     private var pathMonitor: NWPathMonitor?
     private let pathMonitorQueue = DispatchQueue(label: "com.decodersec.app.pathMonitor", qos: .utility)
@@ -23,6 +25,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let pathDebounceInterval: DispatchTimeInterval = .milliseconds(1000)
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+        coreStarted = false
+        coreError = nil
+        resourcesPathError = nil
+
         let providerConfig = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration
 
         guard let payload = TunnelConfigPayload.decode(options: options, providerConfiguration: providerConfig) else {
@@ -65,23 +71,55 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             let resPath = EVCore.resourcesURL(for: payload.coreType).path
             var resErr: NSError?
             if !EvcoreSetResourcesPath(resPath, &resErr), let resErr {
+                self.resourcesPathError = resErr.localizedDescription
                 NSLog("DecoderSec: SetResourcesPath failed: \(resErr)")
             }
 
-            var coreErr: NSError?
-            guard EvcoreStartCore(payload.coreType.rawValue, configContent, Int(fd), Self.tunnelMTU, &coreErr) else {
-                self.coreError = coreErr?.localizedDescription ?? "core failed to start"
-                completionHandler(nil)
-                return
-            }
+            Task {
+                do {
+                    if payload.coreType == .xray {
+                        try await GeoResourceBootstrap.ensurePresent(forConfig: configContent, in: EVCore.resourcesURL(for: .xray))
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.coreError = "Geo resources: \(error.localizedDescription)"
+                        completionHandler(NSError(
+                            domain: "DecoderSec",
+                            code: -3,
+                            userInfo: [NSLocalizedDescriptionKey: self.coreError!]
+                        ))
+                    }
+                    return
+                }
 
-            self.startPathMonitor()
-            completionHandler(nil)
+                var coreErr: NSError?
+                let started = EvcoreStartCore(payload.coreType.rawValue, configContent, Int(fd), Self.tunnelMTU, &coreErr)
+                await MainActor.run {
+                    guard started else {
+                        let message = Self.describeCoreError(coreErr)
+                        self.coreStarted = false
+                        self.coreError = message
+                        NSLog("DecoderSec: EvcoreStartCore failed: \(message)")
+                        completionHandler(NSError(
+                            domain: "DecoderSec",
+                            code: -4,
+                            userInfo: [NSLocalizedDescriptionKey: message]
+                        ))
+                        return
+                    }
+
+                    self.coreStarted = true
+                    self.coreError = nil
+                    self.startPathMonitor()
+                    completionHandler(nil)
+                }
+            }
         }
     }
 
     override func stopTunnel(with _: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         stopPathMonitor()
+        coreStarted = false
 
         let lock = NSLock()
         var didComplete = false
@@ -124,13 +162,48 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         switch type {
         case "core-status":
-            var response: [String: Any] = ["running": coreError == nil]
-            if let err = coreError { response["error"] = err }
-            let data = try? JSONSerialization.data(withJSONObject: response)
-            completionHandler?(data)
+            completionHandler?(Self.encodeJSON(coreStatusPayload()))
+        case "diagnostics":
+            completionHandler?(Self.encodeJSON(diagnosticsPayload()))
         default:
             completionHandler?(nil)
         }
+    }
+
+    private func coreStatusPayload() -> [String: Any] {
+        var response: [String: Any] = ["running": coreStarted]
+        if let err = coreError { response["error"] = err }
+        return response
+    }
+
+    private func diagnosticsPayload() -> [String: Any] {
+        var payload = coreStatusPayload()
+        payload["resourcesPath"] = EVCore.resourcesURL(for: .xray).path
+        if let resourcesPathError {
+            payload["resourcesPathError"] = resourcesPathError
+        }
+
+        let providerConfig = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration
+        if let config = providerConfig?[TunnelConfigPayload.configContentKey] as? String {
+            let geo = GeoResourceBootstrap.status(forConfig: config, in: EVCore.resourcesURL(for: .xray))
+            payload["geoNeedsGeoip"] = geo.needsGeoip
+            payload["geoNeedsGeosite"] = geo.needsGeosite
+            payload["geoHasGeoip"] = geo.hasGeoip
+            payload["geoHasGeosite"] = geo.hasGeosite
+        }
+        return payload
+    }
+
+    private static func encodeJSON(_ object: [String: Any]) -> Data? {
+        try? JSONSerialization.data(withJSONObject: object)
+    }
+
+    private static func describeCoreError(_ error: NSError?) -> String {
+        guard let error else { return "Core failed to start." }
+        if !error.localizedDescription.isEmpty {
+            return error.localizedDescription
+        }
+        return "Core failed to start (domain \(error.domain), code \(error.code))."
     }
 
     private static func makeTunnelSettings(mtu: Int, dnsServers: [String]) -> NEPacketTunnelNetworkSettings {

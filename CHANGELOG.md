@@ -17,6 +17,14 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.18] — 2026-08-12
+
+### Fixed
+- **Core running: no** — VPN больше не показывает «connected», если Xray не стартовал; ошибка ядра возвращается в приложение
+- Авто-загрузка `geoip.dat` / `geosite.dat` в Packet Tunnel при конфигах с `geoip:` / `geosite:` (файлы из Settings → Resources не видны extension без App Group)
+- `XrayNormalizer`: убирает desktop-only inbounds (socks/http), `burstObservatory`, чинит DNS `localhost`, правила с несуществующим `balancerTag`
+- Diagnostics: реальная ошибка ядра, статус geo-файлов, кнопка Refresh core status
+
 ## [0.1.0-beta.17] — 2026-08-12
 
 ### Added

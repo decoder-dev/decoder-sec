@@ -11,7 +11,9 @@ import Foundation
 enum ContainerPaths {
     static let defaultDNSServers = ["1.1.1.1", "8.8.8.8"]
 
-    /// Application Support container shared between app and extension (no App Group).
+    /// Application Support for the current process. App and Packet Tunnel use
+    /// separate containers unless an App Group is configured — geo resources
+    /// are bootstrapped inside the extension on tunnel start.
     static var containerURL: URL {
         let fm = FileManager.default
         let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
