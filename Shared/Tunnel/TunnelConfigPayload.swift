@@ -34,13 +34,18 @@ enum TunnelConfigPayloadError: LocalizedError {
 }
 
 struct TunnelConfigPayload {
-    /// Conservative limit — config is duplicated in providerConfiguration and start options.
+    /// Conservative limit for persisted providerConfiguration.
     static let maxConfigContentBytes = 512 * 1024
+    /// Practical limit for ephemeral startVPNTunnel(options:) — large options
+    /// dictionaries can kill the appex before startTunnel runs (empty Log console).
+    static let maxStartOptionsConfigBytes = 96 * 1024
     static let configContentKey = "configContent"
     static let configIDKey = "configID"
     static let coreTypeKey = "coreType"
     static let dnsServersKey = "dnsServers"
     static let useZashboardKey = "useZashboard"
+    /// Lean start flag — extension must read config from providerConfiguration.
+    static let usePersistedConfigKey = "usePersistedConfig"
 
     static let defaultDNSServers = ["1.1.1.1", "8.8.8.8"]
 
@@ -72,7 +77,7 @@ struct TunnelConfigPayload {
     }
 
     /// For `NEVPNConnection.startVPNTunnel(options:)` — values must be
-    /// `NSObject`.
+    /// `NSObject`. Prefer `asLeanStartOptions` for large Happ configs.
     var asStartOptions: [String: NSObject] {
         [
             Self.configContentKey: configContent as NSString,
@@ -81,6 +86,24 @@ struct TunnelConfigPayload {
             Self.dnsServersKey: dnsServers as NSArray,
             Self.useZashboardKey: NSNumber(value: useZashboard),
         ]
+    }
+
+    /// Tiny options blob: config already saved in providerConfiguration.
+    /// Avoids iOS killing the Packet Tunnel before `startTunnel` when JSON is large.
+    var asLeanStartOptions: [String: NSObject] {
+        [
+            Self.usePersistedConfigKey: NSNumber(value: true),
+            Self.configIDKey: configID as NSString,
+            Self.coreTypeKey: coreType.rawValue as NSString,
+        ]
+    }
+
+    /// Use full options only when the config is small enough for the XPC launch path.
+    var preferredStartOptions: [String: NSObject] {
+        if configContent.utf8.count <= Self.maxStartOptionsConfigBytes {
+            return asStartOptions
+        }
+        return asLeanStartOptions
     }
 
     /// Decodes the extension side of the contract: prefers the fresh

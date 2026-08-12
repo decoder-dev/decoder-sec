@@ -103,6 +103,7 @@ final class TunnelManager: ObservableObject {
     func setEnabled(_ on: Bool, configuration: Configuration?) async {
         guard let configuration else {
             lastError = "No configuration is active."
+            ClientLogBuffer.shared.append("setEnabled ignored — no active configuration")
             return
         }
         do {
@@ -111,26 +112,45 @@ final class TunnelManager: ObservableObject {
                 coreRunning = false
                 lastError = nil
                 lifecyclePhase = .preparingProfile
+                let content = effectiveContent(for: configuration)
+                let bytes = content.utf8.count
+                ClientLogBuffer.shared.append(
+                    "connect begin id=\(configuration.id.uuidString.prefix(8)) core=\(configuration.coreType.rawValue) bytes=\(bytes)"
+                )
                 let m = try await ensureManager(configuration: configuration)
                 let payload = TunnelConfigPayload(
-                    configContent: effectiveContent(for: configuration),
+                    configContent: content,
                     configID: configuration.id.uuidString,
                     coreType: configuration.coreType,
                     dnsServers: AppState.shared.dnsServers,
                     useZashboard: AppState.shared.useZashboardEnabled
                 )
                 try payload.validateSize()
+                let options = payload.preferredStartOptions
+                let lean = options[TunnelConfigPayload.usePersistedConfigKey] != nil
+                    && options[TunnelConfigPayload.configContentKey] == nil
+                ClientLogBuffer.shared.append(
+                    lean
+                        ? "startVPNTunnel lean options (config in VPN profile only, \(bytes) bytes)"
+                        : "startVPNTunnel full options (\(bytes) bytes)"
+                )
                 lifecyclePhase = .connecting
-                try m.connection.startVPNTunnel(options: payload.asStartOptions)
+                try m.connection.startVPNTunnel(options: options)
+                ClientLogBuffer.shared.append("startVPNTunnel accepted by system — waiting for Packet Tunnel")
+                mergeClientLogsIntoConsole()
             } else {
                 pendingReconnect = false
                 coreRunning = false
+                ClientLogBuffer.shared.append("disconnect requested")
                 try await disableTunnel()
+                mergeClientLogsIntoConsole()
             }
         } catch {
             lastError = Self.userFacingError(error)
             coreRunning = false
             lifecyclePhase = .failed(lastError ?? error.localizedDescription)
+            ClientLogBuffer.shared.append("connect/disconnect error: \(lastError ?? error.localizedDescription)")
+            mergeClientLogsIntoConsole()
         }
     }
 
@@ -334,6 +354,18 @@ final class TunnelManager: ObservableObject {
 
         try await m.saveToPreferences()
         try await m.loadFromPreferences()
+        if let saved = (m.protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration,
+           let savedContent = saved[TunnelConfigPayload.configContentKey] as? String,
+           !savedContent.isEmpty {
+            ClientLogBuffer.shared.append("VPN profile saved OK (\(savedContent.utf8.count) bytes, ne=\(proto.providerBundleIdentifier ?? "?"))")
+        } else {
+            ClientLogBuffer.shared.append("WARNING: VPN profile missing configContent after save/load")
+            throw NSError(
+                domain: "DecoderSec",
+                code: -40,
+                userInfo: [NSLocalizedDescriptionKey: String(localized: "VPN profile did not keep the configuration. Try a smaller config or reinstall the IPA.")]
+            )
+        }
         manager = m
         return m
     }
@@ -406,6 +438,8 @@ final class TunnelManager: ObservableObject {
 
     /// startVPNTunnel returns before the extension finishes startTunnel — surface NE logs/errors here.
     private func captureStartupFailureReason() {
+        ClientLogBuffer.shared.append("status connecting→disconnected without connected — probing extension")
+        mergeClientLogsIntoConsole()
         refreshLogs()
         refreshCoreStatus(retries: 3)
 
@@ -413,16 +447,25 @@ final class TunnelManager: ObservableObject {
             guard lastError == nil else { return }
             if let coreError = tunnelDiagnostics.coreError, !coreError.isEmpty {
                 lastError = coreError
+                ClientLogBuffer.shared.append("startup failure from diagnostics: \(coreError)")
+                mergeClientLogsIntoConsole()
                 updateLifecyclePhase()
                 return
             }
-            if let line = tunnelLogs.last(where: { logLineLooksLikeFailure($0) }) {
+            if let line = tunnelLogs.last(where: { logLineLooksLikeFailure($0) && !$0.contains("[app]") }) {
                 lastError = line
                 updateLifecyclePhase()
                 return
             }
             if attempt >= 4 {
-                lastError = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")
+                let extensionSilent = !tunnelLogs.contains(where: { !$0.contains("[app]") })
+                if extensionSilent {
+                    lastError = String(localized: "Packet Tunnel did not start (no extension logs). Large config is now passed via VPN profile only — reinstall 0.1.0 (34), or check NE signing in ESign.")
+                    ClientLogBuffer.shared.append("FATAL: extension never logged — likely killed before startTunnel or wrong PacketTunnel bundle id")
+                } else {
+                    lastError = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")
+                }
+                mergeClientLogsIntoConsole()
                 updateLifecyclePhase()
                 return
             }
@@ -437,6 +480,13 @@ final class TunnelManager: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             resolve(from: 0)
         }
+    }
+
+    /// Merge app-side connect logs into the console so empty extension logs are still useful.
+    func mergeClientLogsIntoConsole() {
+        let appLines = ClientLogBuffer.shared.snapshot()
+        let neLines = tunnelLogs.filter { !$0.contains("[app]") }
+        tunnelLogs = appLines + neLines
     }
 
     private func logLineLooksLikeFailure(_ line: String) -> Bool {
@@ -476,17 +526,23 @@ final class TunnelManager: ObservableObject {
     func refreshLogs() {
         queryTunnelMessage(type: "logs", retries: 3) { [weak self] json in
             guard let self else { return }
-            if let lines = json["lines"] as? [String] {
-                self.tunnelLogs = lines
-            }
+            let neLines = (json["lines"] as? [String]) ?? []
+            let appLines = ClientLogBuffer.shared.snapshot()
+            self.tunnelLogs = appLines + neLines
+        }
+        // Always show app-side lines even when extension is dead.
+        if tunnelLogs.isEmpty || !tunnelLogs.contains(where: { $0.contains("[app]") }) {
+            mergeClientLogsIntoConsole()
         }
     }
 
     func clearLogs() {
+        ClientLogBuffer.shared.clear()
         queryTunnelMessage(type: "clear-logs", retries: 1) { [weak self] _ in
-            self?.tunnelLogs = []
+            self?.tunnelLogs = ClientLogBuffer.shared.snapshot()
             self?.refreshLogs()
         }
+        tunnelLogs = ClientLogBuffer.shared.snapshot()
     }
 
     func refreshTraffic() {

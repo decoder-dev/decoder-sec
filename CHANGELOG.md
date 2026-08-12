@@ -4,6 +4,14 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.34] — 2026-08-12
+
+### Fixed
+- **Пустая консоль логов + «не удалось до старта туннеля»** — большой Happ JSON в `startVPNTunnel(options:)` мог убивать Packet Tunnel **до** `startTunnel`. Теперь конфиг >96 KiB уходит только в VPN profile; options — lean (`usePersistedConfig`)
+- **App-side ClientLogBuffer** — логи Connect видны даже если extension не запустился
+- Проверка, что `configContent` сохранился после `saveToPreferences`/`loadFromPreferences`
+- Settings version: **0.1.0 (34)**
+
 ## [0.1.0-beta.33] — 2026-08-12
 
 ### Root cause

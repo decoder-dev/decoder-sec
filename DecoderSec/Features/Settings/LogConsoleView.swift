@@ -19,7 +19,7 @@ struct LogConsoleView: View {
             if tunnel.tunnelLogs.isEmpty {
                 ContentUnavailableCompat(
                     title: String(localized: "No logs yet"),
-                    subtitle: String(localized: "Connect once to capture tunnel lifecycle events.")
+                    subtitle: String(localized: "Tap Connect — app logs appear even if Packet Tunnel fails to launch.")
                 )
             } else {
                 ScrollViewReader { proxy in
