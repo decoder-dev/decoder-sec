@@ -1,14 +1,14 @@
 #include "ds_tunnel_fd.h"
 
 #include <errno.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <sys/sys_domain.h>
-#include <sys/kern_control.h>
-#include <net/if_utun.h>
+#include <sys/types.h>
 
-// AF_SYSTEM = 32 on Darwin; sockaddr_ctl layout uses ss_family at offset 1 for getpeername buffer.
+// iOS SDK does not ship sys/sys_domain.h, sys/kern_control.h, or net/if_utun.h.
+// Constants match Darwin (same values the old Swift TunnelFD used).
 #ifndef AF_SYSTEM
 #define AF_SYSTEM 32
 #endif

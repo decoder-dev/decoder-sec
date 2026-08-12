@@ -4,6 +4,11 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.39] — 2026-08-12
+
+### Fixed
+- **iOS compile**: `ds_tunnel_fd.c` no longer includes `sys/sys_domain.h` / `net/if_utun.h` (not in iPhoneOS SDK). Uses Darwin constants only so IPA CI can archive.
+
 ## [0.1.0-beta.38] — 2026-08-12
 
 ### Added (Xray docs gaps — Claude audit)
