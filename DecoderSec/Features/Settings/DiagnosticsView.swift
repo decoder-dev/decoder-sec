@@ -116,13 +116,14 @@ struct DiagnosticsView: View {
         if let err = tunnel.lastError, !err.isEmpty { return err }
         if tunnel.status == .connected, !tunnel.coreRunning,
            let line = tunnel.tunnelLogs.last(where: {
-               $0.lowercased().contains("evcorestartcore") && $0.lowercased().contains("failed")
+               $0.lowercased().contains("evcorestartcore") && (
+                   $0.lowercased().contains("failed") || $0.lowercased().contains("watchdog")
+               )
            }) {
             return line
         }
-        if tunnel.status == .connected, !tunnel.coreRunning,
-           tunnel.lifecyclePhase == .coreFailed || tunnel.lifecyclePhase == .tunnelUpCorePending {
-            return tunnel.lifecyclePhase.displaySummary
+        if tunnel.status == .connected, !tunnel.coreRunning {
+            return String(localized: "Core did not start — open Log console")
         }
         return "—"
     }
@@ -211,7 +212,8 @@ private struct XraySnapshot {
         let rules = (routing["rules"] as? [[String: Any]]) ?? []
 
         let hasCatchAll = rules.contains(where: looksLikeCatchAll)
-        let hasBalancer = rules.contains(where: { $0["balancerTag"] != nil })
+        let hasBalancer = (routing["balancers"] as? [Any])?.isEmpty == false
+            || rules.contains(where: { $0["balancerTag"] != nil })
 
         var dns: [String] = []
         if let dnsObj = root["dns"] as? [String: Any],

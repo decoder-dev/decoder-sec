@@ -4,6 +4,21 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.31] — 2026-08-12
+
+### Fixed
+- **Happ конфиг с balancer + DNS localhost** — по Diagnostics: balancer=да, catch-all=нет, DNS=`localhost`. Android (v2rayNG) держит observatory **вместе** с balancer; beta.30 minimal убирал observatory и оставлял balancer → ядро зависало/не стартовало
+- Всегда **ios-safe normalize**: flatten balancer → `proxy`, strip DNS localhost, catch-all, TUN sniffing
+- Watchdog 12s на `EvcoreStartCore` + понятная ошибка вместо «Tunnel up — starting core…»
+
+### Analysis (Android → iOS)
+| Нужно | Android | decoder sec. beta.31 |
+|-------|---------|----------------------|
+| Geo в bundle | APK assets | `ThirdParty/geo/` в appex |
+| Balancer | + observatory | flatten (observatory в NE ненадёжен) |
+| DNS localhost | desktop OK | strip |
+| Catch-all | в шаблоне | всегда добавляем |
+
 ## [0.1.0-beta.30] — 2026-08-12
 
 ### Fixed

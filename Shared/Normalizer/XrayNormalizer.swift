@@ -2,6 +2,12 @@
 //  XrayNormalizer.swift
 //  DecoderSec
 //
+//  iOS-safe normalize for Happ / v2rayN subscription JSON.
+//  Android (v2rayNG): balancers always ship with observatory/burstObservatory,
+//  or use random/roundRobin without probes. Happ desktop configs often have
+//  balancers + observatory + DNS localhost — the last two break EvcoreStartCore
+//  on iOS Packet Tunnel (no local DNS inbound; observatory probes hang TUN).
+//
 
 import Foundation
 
@@ -9,57 +15,16 @@ enum XrayNormalizer: JSONCoreNormalizer {
     private static let logFloor = "warning"
     private static let logOrder = ["debug", "info", "warning", "error", "none"]
 
-    struct TunnelPreparedConfig {
-        var minimal: String
-        var hardened: String
-    }
-
-    /// App/editor path — hardened normalize without geo strip.
+    /// Single iOS-safe config for Packet Tunnel (Android custom JSON + TUN injection).
     static func normalize(_ content: String, useZashboard: Bool) throws -> String {
         try normalize(content, useZashboard: useZashboard, stripGeoRules: false)
     }
 
-    /// Packet Tunnel: Android/v2rayNG pass config close to original; hardened is fallback.
-    static func prepareForTunnel(_ content: String, useZashboard: Bool, stripGeoRules: Bool) throws -> TunnelPreparedConfig {
-        TunnelPreparedConfig(
-            minimal: try normalizeMinimal(content),
-            hardened: try normalize(content, useZashboard: useZashboard, stripGeoRules: stripGeoRules)
-        )
-    }
-
-    /// Everywhere upstream + iOS TUN only — no routing/DNS rewriting (libv2ray / Happ pattern).
-    static func normalizeMinimal(_ content: String) throws -> String {
-        var root = try parseJSONObject(content)
-        root.removeValue(forKey: "burstObservatory")
-        root.removeValue(forKey: "observatory")
-
-        var inbounds = (root["inbounds"] as? [[String: Any]]) ?? []
-        inbounds = inbounds.filter { isTunInbound($0, typeKey: "protocol") }
-
-        if let first = inbounds.firstIndex(where: { isTunInbound($0, typeKey: "protocol") }) {
-            var patched = inbounds[first]
-            patched["protocol"] = "tun"
-            patched["tag"] = decoderTunTag
-            var settings = (patched["settings"] as? [String: Any]) ?? [:]
-            settings["name"] = "utun"
-            settings["MTU"] = tunnelMTU
-            patched["settings"] = settings
-            inbounds[first] = patched
-            removeOtherTunInbounds(&inbounds, keep: first, typeKey: "protocol")
-        } else {
-            inbounds.append([
-                "tag": decoderTunTag,
-                "protocol": "tun",
-                "settings": ["name": "utun", "MTU": tunnelMTU],
-            ])
-        }
-        root["inbounds"] = inbounds
-        root["log"] = cappedLog(root["log"] as? [String: Any])
-        return try serializeJSON(root)
-    }
-
     static func normalize(_ content: String, useZashboard _: Bool, stripGeoRules: Bool) throws -> String {
         var root = try parseJSONObject(content)
+
+        // Balancers without live observatory hang or fail on iOS TUN.
+        // v2rayNG keeps observatory WITH balancers; we flatten to a fixed outbound.
         root.removeValue(forKey: "burstObservatory")
         root.removeValue(forKey: "observatory")
 
@@ -104,6 +69,38 @@ enum XrayNormalizer: JSONCoreNormalizer {
             stripGeoRules: stripGeoRules
         )
         return try serializeJSON(root)
+    }
+
+    /// Features that break or hang Xray on iOS Packet Tunnel if left as-is.
+    static func iosHazards(in content: String) -> [String] {
+        guard let root = try? parseJSONObject(content) else { return ["unparseable"] }
+        var hazards: [String] = []
+        let routing = root["routing"] as? [String: Any] ?? [:]
+        if routing["balancers"] != nil { hazards.append("balancers") }
+        let rules = routing["rules"] as? [[String: Any]] ?? []
+        if rules.contains(where: { ($0["balancerTag"] as? String)?.isEmpty == false }) {
+            hazards.append("balancerTag")
+        }
+        if root["observatory"] != nil { hazards.append("observatory") }
+        if root["burstObservatory"] != nil { hazards.append("burstObservatory") }
+        if dnsHasLocalhost(root["dns"]) { hazards.append("dns-localhost") }
+        return hazards
+    }
+
+    private static func dnsHasLocalhost(_ dns: Any?) -> Bool {
+        guard let dnsObj = dns as? [String: Any],
+              let servers = dnsObj["servers"] as? [Any] else { return false }
+        return servers.contains { entry in
+            if let s = entry as? String {
+                let t = s.trimmingCharacters(in: .whitespaces).lowercased()
+                return t == "localhost" || t == "127.0.0.1"
+            }
+            if let obj = entry as? [String: Any], let address = obj["address"] as? String {
+                let t = address.trimmingCharacters(in: .whitespaces).lowercased()
+                return t == "localhost" || t == "127.0.0.1"
+            }
+            return false
+        }
     }
 
     private static func sanitizeOutbounds(_ outbounds: [[String: Any]]) -> [[String: Any]] {
@@ -164,6 +161,7 @@ enum XrayNormalizer: JSONCoreNormalizer {
                 copy = stripGeoTokens(from: copy, key: "ip", prefix: "geoip:")
             }
 
+            // Drop empty shells after geo strip / balancer flatten.
             guard ruleHasSelectors(copy) || copy["outboundTag"] != nil else { return nil }
             return copy
         }
@@ -214,7 +212,6 @@ enum XrayNormalizer: JSONCoreNormalizer {
     }
 
     private static func looksLikeCatchAll(_ rule: [String: Any]) -> Bool {
-        guard (rule["type"] as? String) == "field" else { return false }
         let hasForward = rule["outboundTag"] != nil || rule["balancerTag"] != nil
         return hasForward && !ruleHasSelectors(rule)
     }
