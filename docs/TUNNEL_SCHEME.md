@@ -153,7 +153,7 @@ Polling: `TunnelManager.refreshCoreStatus` / `captureStartupFailureReason` с ba
 | Connect → сразу disconnected | startTunnel throw до TUN; missing config; NE entitlement | Log console, last line |
 | Connected, Core running: no | EvcoreStartCore fail; geo strip | Diagnostics → coreError |
 | «Connection failed before tunnel came up» | extension умер до IPC; timeout transition | Log console; beta.25+ тянет реальную строку |
-| **Zero extension logs at all** (`[app]`-only lines, stuck `.connecting` 15s+) | appex never reaches `startTunnel` — ESign resign missing Network Extension entitlement on `.appex`, or `providerConfiguration` dropped from the persisted profile | beta.43 connect watchdog sets actionable error at 15s; `lastDisconnectError` (iOS 16+); dual start fallback auto-retries with full options |
+| **Zero extension logs at all** (`[app]`-only lines, stuck `.connecting` 15s+) | appex never reaches `startTunnel` — ESign resign missing Network Extension entitlement on `.appex`, or `providerConfiguration` dropped from the persisted profile | beta.43 connect watchdog sets actionable error at 15s; `fetchLastDisconnectError` (iOS 16+); dual start fallback auto-retries with full options |
 | Geo rules stripped | нет .dat в **extension** container | Diagnostics geo rows; reconnect после download |
 | 26 subscription refresh failed | HWID / crypt / HTTP | Subscribe errors; Settings HWID |
 
@@ -198,7 +198,7 @@ Polling: `TunnelManager.refreshCoreStatus` / `captureStartupFailureReason` с ba
 ### P0 (beta.43) — Packet Tunnel never reaches `startTunnel` (ESign)
 
 - [x] `ensureManager` re-fetches from `loadAllFromPreferences()` after save and matches by NE bundle id — `startVPNTunnel` runs against the on-disk manager, not a stale in-memory one.
-- [x] Capture `NEVPNConnection.lastDisconnectError` (iOS 16+) on failed connect / watchdog.
+- [x] Capture `NEVPNConnection.fetchLastDisconnectError` (iOS 16+) on failed connect / watchdog.
 - [x] ~15s connect watchdog: actionable ESign-entitlement error when still `.connecting` with zero extension logs (before the 35s hard reset).
 - [x] Dual start fallback: one automatic `asStartOptions` retry when lean `startVPNTunnel` produces no extension logs (configs < 96 KiB).
 - [x] `PacketTunnelProvider.init()` logs (ring buffer + os_log + on-disk marker) — the only trace available if the appex launches and crashes before `startTunnel`.
