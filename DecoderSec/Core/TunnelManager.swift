@@ -47,7 +47,7 @@ final class TunnelManager: ObservableObject {
     private var didConnect: Bool = false
 
     private var transitionTimeoutTask: Task<Void, Never>?
-    private static let transitionTimeoutNanos: UInt64 = 30 * 1_000_000_000
+    private static let transitionTimeoutNanos: UInt64 = 45 * 1_000_000_000
 
     private init() {
         setupStatusObserver()
@@ -278,7 +278,7 @@ final class TunnelManager: ObservableObject {
         do {
             try await disableTunnel()
             if lastError == nil {
-                lastError = "Tunnel reset after timing out. Check the configuration and try again."
+                lastError = "Tunnel reset after timing out. Open Diagnostics and tap Refresh core status for details."
             }
         } catch {
             lastError = Self.userFacingError(error)

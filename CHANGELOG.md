@@ -17,6 +17,13 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.19] — 2026-08-12
+
+### Fixed
+- Таймаут «Tunnel reset after timing out» — `startTunnel` в Packet Tunnel больше не использует Swift `Task`/`MainActor` (зависал без `completionHandler`)
+- Гарантированный однократный callback старта + watchdog 25s с понятной ошибкой
+- Geo-загрузка переведена на blocking URLSession (стабильнее в Network Extension)
+
 ## [0.1.0-beta.18] — 2026-08-12
 
 ### Fixed
