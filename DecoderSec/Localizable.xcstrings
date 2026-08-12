@@ -3631,6 +3631,50 @@
           }
         }
       }
+    },
+    "iOS hazards (auto-fixed before start)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS hazards (auto-fixed before start)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Риски iOS (исправляются перед стартом)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 风险项（启动前自动修复）"
+          }
+        }
+      }
+    },
+    "Detected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detected"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обнаружено"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检测到"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

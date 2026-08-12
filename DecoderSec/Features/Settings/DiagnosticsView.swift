@@ -47,6 +47,12 @@ struct DiagnosticsView: View {
                 }
             }
 
+            if !tunnel.tunnelDiagnostics.hazards.isEmpty {
+                Section(String(localized: "iOS hazards (auto-fixed before start)")) {
+                    row(String(localized: "Detected"), tunnel.tunnelDiagnostics.hazards.joined(separator: ", "))
+                }
+            }
+
             Section(String(localized: "Routing")) {
                 row(String(localized: "Routing enabled"), boolText(routing.routingEnabled))
                 row(String(localized: "Active routing profile"), routing.activeProfile?.name ?? String(localized: "none"))

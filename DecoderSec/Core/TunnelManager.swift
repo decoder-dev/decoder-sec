@@ -21,6 +21,7 @@ struct TunnelDiagnosticsSnapshot: Equatable {
     var geoHasGeosite: Bool
     var geoStripped: Bool
     var sessionSeconds: Int?
+    var hazards: [String]
 
     static let empty = TunnelDiagnosticsSnapshot(
         coreRunning: false,
@@ -32,7 +33,8 @@ struct TunnelDiagnosticsSnapshot: Equatable {
         geoHasGeoip: false,
         geoHasGeosite: false,
         geoStripped: false,
-        sessionSeconds: nil
+        sessionSeconds: nil,
+        hazards: []
     )
 }
 
@@ -201,7 +203,8 @@ final class TunnelManager: ObservableObject {
                 geoHasGeoip: json["geoHasGeoip"] as? Bool ?? false,
                 geoHasGeosite: json["geoHasGeosite"] as? Bool ?? false,
                 geoStripped: json["geoStripped"] as? Bool ?? false,
-                sessionSeconds: json["sessionSeconds"] as? Int
+                sessionSeconds: json["sessionSeconds"] as? Int,
+                hazards: json["hazards"] as? [String] ?? []
             )
             self.reconcileCoreErrorFromLogs(fallback: error, running: running)
             self.maybeAutoReconnectAfterGeoDownload()

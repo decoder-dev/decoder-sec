@@ -5,6 +5,21 @@
 //  Startup follows NodePassProject/Everywhere: synchronous EvcoreStartCore,
 //  completionHandler(nil) even when the core fails so IPC can report coreError.
 //
+//  Threading note (beta.32): `EvcoreStartCore` is a synchronous cgo call into
+//  Xray/sing-box/mihomo. iOS delivers every NEProvider callback — startTunnel,
+//  handleAppMessage, stopTunnel, sleep/wake — serialized on one internal
+//  queue (same pattern documented by WireGuardKit/Mullvad's PacketTunnelProvider:
+//  they dispatch tunnel bring-up onto their own queue for the same reason).
+//  Running EvcoreStartCore inline on that queue means a slow or hung core
+//  start (Happ balancer configs probing an unreachable outbound, DNS lookups
+//  with no timeout, etc.) also starves `handleAppMessage` — the app's
+//  `sendProviderMessage` calls queue up behind it and never get a reply.
+//  That is what "Tunnel up — starting core..." stuck forever with no error
+//  looks like: the extension is alive, but Diagnostics can't ask it anything.
+//  `coreQueue` below keeps all Evcore calls off that shared queue so IPC
+//  always answers, even mid-hang; `stateLock` protects the state the two
+//  queues both touch.
+//
 
 import EverywhereCore
 import Network
@@ -13,6 +28,11 @@ import NetworkExtension
 @objc(PacketTunnelProvider)
 final class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let tunnelMTU = 1500
+    private static let startWatchdogSeconds: Double = 12
+    private static let retryWatchdogSeconds: Double = 8
+
+    private let coreQueue = DispatchQueue(label: "com.decodersec.app.tunnel.core", qos: .userInitiated)
+    private let stateLock = NSLock()
 
     private var coreStarted = false
     private var coreError: String?
@@ -30,15 +50,24 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private var latestPath: Network.NWPath?
     private static let pathDebounceInterval: DispatchTimeInterval = .milliseconds(1000)
 
+    /// All reads/writes of the `private var`s above go through this so the
+    /// NEProvider callback queue and `coreQueue` never race on them.
+    private func withState<T>(_ body: () -> T) -> T {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return body()
+    }
+
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        coreStarted = false
-        coreError = nil
-        resourcesPathError = nil
-        lastConfigContent = nil
-        geoStripped = false
-        sessionStartedAt = Date()
-        startWatchdog?.cancel()
-        startWatchdog = nil
+        withState {
+            coreStarted = false
+            coreError = nil
+            resourcesPathError = nil
+            lastConfigContent = nil
+            geoStripped = false
+            sessionStartedAt = Date()
+        }
+        withState { startWatchdog?.cancel(); startWatchdog = nil }
         TunnelLogBuffer.shared.append("startTunnel begin")
 
         let providerConfig = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration
@@ -52,16 +81,18 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        lastCoreType = payload.coreType
-        lastUseZashboard = payload.useZashboard
-        lastConfigContent = payload.configContent
+        withState {
+            lastCoreType = payload.coreType
+            lastUseZashboard = payload.useZashboard
+            lastConfigContent = payload.configContent
+        }
         TunnelLogBuffer.shared.append("payload core=\(payload.coreType.rawValue) zashboard=\(payload.useZashboard)")
 
         let configContent: String
         do {
             configContent = try prepareConfig(payload)
         } catch {
-            coreError = error.localizedDescription
+            withState { coreError = error.localizedDescription }
             TunnelLogBuffer.shared.append("prepareConfig failed: \(error.localizedDescription)")
             completionHandler(error)
             return
@@ -76,94 +107,16 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
             if let error {
-                self.coreError = error.localizedDescription
+                self.withState { self.coreError = error.localizedDescription }
                 TunnelLogBuffer.shared.append("setTunnelNetworkSettings failed: \(error.localizedDescription)")
                 completionHandler(error)
                 return
             }
 
-            let fd = TunnelFD.lookup(for: self.packetFlow)
-            if fd < 0 {
-                self.coreError = "could not obtain TUN file descriptor"
-                TunnelLogBuffer.shared.append(self.coreError!)
-                completionHandler(NSError(
-                    domain: "DecoderSec",
-                    code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: self.coreError!]
-                ))
-                return
+            // Hand off to coreQueue immediately — see threading note above.
+            self.coreQueue.async {
+                self.bootCore(payload: payload, configContent: configContent, completionHandler: completionHandler)
             }
-            TunnelLogBuffer.shared.append("TUN fd=\(fd)")
-
-            let resPath = EVCore.resourcesURL(for: payload.coreType).path
-            var resErr: NSError?
-            if !EvcoreSetResourcesPath(resPath, &resErr), let resErr {
-                self.resourcesPathError = resErr.localizedDescription
-                TunnelLogBuffer.shared.append("SetResourcesPath failed: \(resErr.localizedDescription)")
-            }
-
-            var coreErr: NSError?
-            _ = EvcoreStopAll(&coreErr)
-            coreErr = nil
-
-            let hazards = payload.coreType == .xray
-                ? XrayNormalizer.iosHazards(in: payload.configContent)
-                : []
-            if !hazards.isEmpty {
-                TunnelLogBuffer.shared.append("ios-safe normalize for: \(hazards.joined(separator: ","))")
-            }
-
-            // Sync EvcoreStartCore can hang on broken Happ configs — fail the tunnel if >12s.
-            let finishState = StartFinishState()
-            let watchdog = DispatchWorkItem { [weak self] in
-                guard finishState.markFinished() else { return }
-                guard let self else { return }
-                TunnelLogBuffer.shared.append("EvcoreStartCore watchdog 12s — aborting hung start")
-                self.coreStarted = false
-                self.coreError = "Core start timed out (12s). Happ balancer/observatory/DNS localhost — reconnect after update."
-                var stopErr: NSError?
-                _ = EvcoreStopAll(&stopErr)
-                completionHandler(nil)
-            }
-            self.startWatchdog = watchdog
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 12, execute: watchdog)
-
-            TunnelLogBuffer.shared.append("EvcoreStartCore (\(configContent.utf8.count) bytes)")
-            let started = EvcoreStartCore(
-                payload.coreType.rawValue,
-                configContent,
-                Int(fd),
-                Self.tunnelMTU,
-                &coreErr
-            )
-
-            watchdog.cancel()
-            self.startWatchdog = nil
-            guard finishState.markFinished() else {
-                TunnelLogBuffer.shared.append("EvcoreStartCore returned after watchdog — ignored")
-                return
-            }
-
-            guard started else {
-                var message = Self.describeCoreError(coreErr)
-                if self.geoStripped {
-                    message += " (geo rules were stripped — missing .dat in extension)"
-                }
-                if !hazards.isEmpty {
-                    message += " [hazards: \(hazards.joined(separator: ","))]"
-                }
-                self.coreStarted = false
-                self.coreError = message
-                TunnelLogBuffer.shared.append("EvcoreStartCore failed: \(message)")
-                completionHandler(nil)
-                return
-            }
-
-            self.coreStarted = true
-            self.coreError = nil
-            TunnelLogBuffer.shared.append("EvcoreStartCore OK")
-            self.startPathMonitor()
-            completionHandler(nil)
         }
     }
 
@@ -178,7 +131,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             }
             let status = GeoResourceBootstrap.status(forConfig: raw, in: dir)
             let stripGeo = !status.isReady
-            geoStripped = stripGeo
+            withState { geoStripped = stripGeo }
             if stripGeo, let missing = status.missingSummary {
                 TunnelLogBuffer.shared.append("missing geo (\(missing)) — stripping geosite/geoip rules")
                 DispatchQueue.global(qos: .utility).async {
@@ -203,10 +156,197 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         return try ConfigNormalizer.normalize(raw, for: payload.coreType, useZashboard: payload.useZashboard)
     }
 
+    // MARK: - Core boot (coreQueue only)
+
+    /// Runs entirely on `coreQueue`. Looks up the TUN fd, points the core at
+    /// the extension's Resources dir, then calls `EvcoreStartCore`. If that
+    /// fails with an error that looks like a missing geosite/geoip category
+    /// (Xray-core refuses to start at all in that case — see
+    /// `looksLikeGeoCategoryFailure`) and we did NOT already strip geo rules,
+    /// retries once with `stripGeoRules` forced — Happ's bundled category
+    /// names don't always exist in whatever geoip/geosite.dat we shipped.
+    private func bootCore(
+        payload: TunnelConfigPayload,
+        configContent: String,
+        completionHandler: @escaping (Error?) -> Void
+    ) {
+        let fd = TunnelFD.lookup(for: self.packetFlow)
+        if fd < 0 {
+            let msg = "could not obtain TUN file descriptor"
+            withState { coreError = msg }
+            TunnelLogBuffer.shared.append(msg)
+            completionHandler(NSError(domain: "DecoderSec", code: -1, userInfo: [NSLocalizedDescriptionKey: msg]))
+            return
+        }
+        TunnelLogBuffer.shared.append("TUN fd=\(fd)")
+
+        let resPath = EVCore.resourcesURL(for: payload.coreType).path
+        var resErr: NSError?
+        if !EvcoreSetResourcesPath(resPath, &resErr), let resErr {
+            withState { resourcesPathError = resErr.localizedDescription }
+            TunnelLogBuffer.shared.append("SetResourcesPath failed: \(resErr.localizedDescription)")
+        }
+
+        var stopErr: NSError?
+        _ = EvcoreStopAll(&stopErr)
+
+        let hazards = payload.coreType == .xray
+            ? XrayNormalizer.iosHazards(in: payload.configContent)
+            : []
+        if !hazards.isEmpty {
+            TunnelLogBuffer.shared.append("ios-safe normalize for: \(hazards.joined(separator: ","))")
+        }
+
+        let outcome = attemptStart(
+            coreTypeRaw: payload.coreType.rawValue,
+            content: configContent,
+            fd: fd,
+            timeoutSeconds: Self.startWatchdogSeconds,
+            completionHandler: completionHandler
+        )
+
+        switch outcome {
+        case .started:
+            finishSuccess(completionHandler: completionHandler)
+
+        case .timedOut:
+            // Watchdog already reported failure and called completionHandler.
+            return
+
+        case .failed(let coreErr):
+            let message = Self.describeCoreError(coreErr)
+            let alreadyStripped = withState { geoStripped }
+            guard !alreadyStripped,
+                  payload.coreType == .xray,
+                  Self.looksLikeGeoCategoryFailure(message),
+                  let retryContent = try? XrayNormalizer.normalize(
+                      payload.configContent, useZashboard: payload.useZashboard, stripGeoRules: true
+                  ) else {
+                finishFailure(message: message, hazards: hazards, completionHandler: completionHandler)
+                return
+            }
+
+            TunnelLogBuffer.shared.append("EvcoreStartCore failed (\(message)) — retrying with geo rules stripped")
+            withState { geoStripped = true }
+            var retryStopErr: NSError?
+            _ = EvcoreStopAll(&retryStopErr)
+
+            let retryOutcome = attemptStart(
+                coreTypeRaw: payload.coreType.rawValue,
+                content: retryContent,
+                fd: fd,
+                timeoutSeconds: Self.retryWatchdogSeconds,
+                completionHandler: completionHandler
+            )
+            switch retryOutcome {
+            case .started:
+                TunnelLogBuffer.shared.append("EvcoreStartCore OK after geo-strip retry")
+                finishSuccess(completionHandler: completionHandler)
+            case .timedOut:
+                return
+            case .failed(let retryErr):
+                finishFailure(message: Self.describeCoreError(retryErr), hazards: hazards, completionHandler: completionHandler)
+            }
+        }
+    }
+
+    private enum CoreAttemptOutcome {
+        case started
+        case timedOut
+        case failed(NSError?)
+    }
+
+    /// Single `EvcoreStartCore` attempt with its own watchdog. On timeout the
+    /// watchdog itself finalizes state and calls `completionHandler` — the
+    /// caller must return immediately on `.timedOut` without calling it again.
+    private func attemptStart(
+        coreTypeRaw: String,
+        content: String,
+        fd: Int32,
+        timeoutSeconds: Double,
+        completionHandler: @escaping (Error?) -> Void
+    ) -> CoreAttemptOutcome {
+        let finishState = StartFinishState()
+        let watchdog = DispatchWorkItem { [weak self] in
+            guard finishState.markFinished() else { return }
+            guard let self else { return }
+            TunnelLogBuffer.shared.append("EvcoreStartCore watchdog \(Int(timeoutSeconds))s — aborting hung start")
+            self.withState {
+                self.coreStarted = false
+                self.coreError = "Core start timed out (\(Int(timeoutSeconds))s). Happ balancer/observatory/DNS localhost — reconnect after update."
+            }
+            var stopErr: NSError?
+            _ = EvcoreStopAll(&stopErr)
+            completionHandler(nil)
+        }
+        withState { startWatchdog = watchdog }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeoutSeconds, execute: watchdog)
+
+        TunnelLogBuffer.shared.append("EvcoreStartCore (\(content.utf8.count) bytes)")
+        var coreErr: NSError?
+        let started = EvcoreStartCore(coreTypeRaw, content, Int(fd), Self.tunnelMTU, &coreErr)
+
+        watchdog.cancel()
+        withState { startWatchdog = nil }
+        guard finishState.markFinished() else {
+            TunnelLogBuffer.shared.append("EvcoreStartCore returned after watchdog — ignored")
+            return .timedOut
+        }
+        return started ? .started : .failed(coreErr)
+    }
+
+    private func finishSuccess(completionHandler: @escaping (Error?) -> Void) {
+        withState {
+            coreStarted = true
+            coreError = nil
+        }
+        TunnelLogBuffer.shared.append("EvcoreStartCore OK")
+        startPathMonitor()
+        completionHandler(nil)
+    }
+
+    private func finishFailure(message: String, hazards: [String], completionHandler: @escaping (Error?) -> Void) {
+        var message = message
+        if withState({ geoStripped }) {
+            message += " (geo rules were stripped — missing/incompatible .dat in extension)"
+        }
+        if !hazards.isEmpty {
+            message += " [hazards: \(hazards.joined(separator: ","))]"
+        }
+        withState {
+            coreStarted = false
+            coreError = message
+        }
+        TunnelLogBuffer.shared.append("EvcoreStartCore failed: \(message)")
+        completionHandler(nil)
+    }
+
+    /// Xray-core (`infra/conf`) refuses to start at all — not a hang, an
+    /// immediate hard error — when a routing/DNS rule references a
+    /// geosite/geoip category the loaded .dat doesn't contain, e.g.
+    /// `infra/conf: failed to load geosite: WHITELIST-LV2 > infra/conf: list
+    /// not found in geosite.dat: WHITELIST-LV2`. Happ ships its own curated
+    /// geo files; our bundled roscomvpn set won't always have every category
+    /// a given Happ config expects, so this is the realistic failure mode —
+    /// not the missing-file case `GeoResourceBootstrap` already covers.
+    private static func looksLikeGeoCategoryFailure(_ message: String) -> Bool {
+        let lower = message.lowercased()
+        guard lower.contains("geosite") || lower.contains("geoip") else { return false }
+        return lower.contains("not found")
+            || lower.contains("failed to load")
+            || lower.contains("failed to parse")
+            || lower.contains("no such file")
+            || lower.contains("category")
+    }
+
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         TunnelLogBuffer.shared.append("stopTunnel reason=\(reason.rawValue)")
         stopPathMonitor()
-        coreStarted = false
+        withState {
+            coreStarted = false
+            startWatchdog?.cancel()
+            startWatchdog = nil
+        }
 
         let lock = NSLock()
         var didComplete = false
@@ -270,29 +410,47 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private func diagnosticsPayload() -> [String: Any] {
+        let snapshot = withState {
+            (
+                started: coreStarted,
+                error: coreError,
+                resourcesPathError: resourcesPathError,
+                coreType: lastCoreType,
+                sessionStartedAt: sessionStartedAt,
+                configContent: lastConfigContent,
+                geoStripped: geoStripped
+            )
+        }
+
         var payload: [String: Any] = [
-            "running": coreStarted,
-            "geoStripped": geoStripped,
+            "running": snapshot.started,
+            "geoStripped": snapshot.geoStripped,
         ]
-        if let err = coreError, !err.isEmpty {
+        if let err = snapshot.error, !err.isEmpty {
             payload["error"] = err
-        } else if !coreStarted {
+        } else if !snapshot.started {
             payload["error"] = "Core is not running."
         }
-        payload["resourcesPath"] = EVCore.resourcesURL(for: lastCoreType).path
-        if let resourcesPathError {
+        payload["resourcesPath"] = EVCore.resourcesURL(for: snapshot.coreType).path
+        if let resourcesPathError = snapshot.resourcesPathError {
             payload["resourcesPathError"] = resourcesPathError
         }
-        if let started = sessionStartedAt {
+        if let started = snapshot.sessionStartedAt {
             payload["sessionSeconds"] = Int(Date().timeIntervalSince(started))
         }
 
-        if let config = lastConfigContent {
+        if let config = snapshot.configContent {
             let geo = GeoResourceBootstrap.status(forConfig: config, in: EVCore.resourcesURL(for: .xray))
             payload["geoNeedsGeoip"] = geo.needsGeoip
             payload["geoNeedsGeosite"] = geo.needsGeosite
             payload["geoHasGeoip"] = geo.hasGeoip
             payload["geoHasGeosite"] = geo.hasGeosite
+            if snapshot.coreType == .xray {
+                let hazards = XrayNormalizer.iosHazards(in: config)
+                if !hazards.isEmpty {
+                    payload["hazards"] = hazards
+                }
+            }
         }
         return payload
     }
@@ -300,13 +458,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Clash controller lives inside the NE when Dashboard is enabled for mihomo/sing-box.
     /// Xray has no Evcore traffic API — report unavailable.
     private func trafficPayload() -> [String: Any] {
-        guard coreStarted else {
+        let snapshot = withState { (started: coreStarted, useZashboard: lastUseZashboard, coreType: lastCoreType) }
+        guard snapshot.started else {
             return ["available": false, "reason": "core not running"]
         }
-        guard lastUseZashboard, lastCoreType != .xray else {
+        guard snapshot.useZashboard, snapshot.coreType != .xray else {
             return [
                 "available": false,
-                "reason": lastCoreType == .xray
+                "reason": snapshot.coreType == .xray
                     ? "Xray has no traffic API in EverywhereCore"
                     : "Enable Dashboard to expose Clash traffic",
             ]
@@ -404,7 +563,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 }
 
-/// Ensures startTunnel completionHandler is invoked exactly once (watchdog vs EvcoreStartCore).
+/// Ensures a single `EvcoreStartCore` attempt's completion is only acted on
+/// once (watchdog vs the call itself returning).
 private final class StartFinishState {
     private let lock = NSLock()
     private var finished = false

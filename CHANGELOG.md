@@ -4,6 +4,47 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.32] — 2026-08-12
+
+### Root cause (Android/v2rayNG + Xray-core research)
+
+Studied `2dust/v2rayNG` (`V2rayConfigManager.getBalance`/`getV2rayCustomConfig`),
+`2dust/AndroidLibXrayLite` (`InitCoreEnv`/`xray.location.asset`), `NodePassProject/EverywhereCore`
+(`go/core.go`, `go/resources.go`, `go/xray.go`, `PATCHES.md`) and Happ's routing docs. Two concrete
+gaps beta.31 missed, both matching the reported symptom (VPN connected, Core running: no, stuck on
+*"Tunnel up — starting core…"* forever, no error text):
+
+1. **`EvcoreStartCore` shared the NEProvider callback queue with `handleAppMessage`.** iOS delivers
+   `startTunnel`/`handleAppMessage`/`stopTunnel`/etc. serialized on one internal queue (same reason
+   WireGuardKit/Mullvad dispatch their tunnel bring-up onto a private queue). `EvcoreStartCore` is a
+   synchronous cgo call into Xray; a slow or wedged start (unreachable balancer target, DNS lookup
+   with no timeout) starved that queue, so `sendProviderMessage` from the app never got a reply —
+   Diagnostics had nothing to show because the extension never answered, not because it had no error.
+2. **Xray-core hard-fails (not hangs) when a routing/DNS rule references a geosite/geoip category the
+   loaded `.dat` doesn't contain** — `infra/conf: failed to load geosite: WHITELIST-LV2 > infra/conf:
+   list not found in geosite.dat: WHITELIST-LV2`. Happ ships its own curated geo files; our bundled
+   roscomvpn set doesn't necessarily contain every category (e.g. `whitelist-lv2`/`whitelist-lv3`) a
+   given Happ config expects. `GeoResourceBootstrap` only checked file *existence*, not category
+   coverage, so `EvcoreStartCore` failed even though "geo resources: ready" showed in Diagnostics.
+
+### Fixed
+- **`PacketTunnelProvider`**: `EvcoreStartCore`/`EvcoreSetResourcesPath`/`EvcoreStopAll` now run on a
+  dedicated `coreQueue`, never inline on the queue `handleAppMessage` shares — Diagnostics/logs IPC
+  now always answers, even mid-hang. All state shared between that queue and IPC is lock-guarded
+  (`stateLock`) instead of touched from two threads unsynchronized.
+- **Geo-category hard-failure retry**: if `EvcoreStartCore` fails with an error that looks like a
+  missing geosite/geoip category, automatically retries once with `stripGeoRules` forced — matches
+  Xray-core's actual fail-fast behavior instead of leaving the tunnel stuck.
+- **`XrayNormalizer`**: balancer flatten now resolves each `balancers[].tag` via its `selector`
+  prefix list (mirrors v2rayNG `getBalance()`'s `lstSelector`) instead of collapsing every
+  `balancerTag` rule onto the same outbound — a config with a "whitelist" balancer alongside the main
+  "proxy" balancer (`whitelist-lv2`/`whitelist-lv3` outbounds) keeps its routing intent.
+- **DNS sanitize**: stripping `localhost`/`127.0.0.1` no longer risks leaving DNS with only
+  domain-scoped servers and no catch-all resolver — re-adds the default servers when nothing else
+  covers unmatched domains.
+- Diagnostics IPC now includes `hazards` (balancers/observatory/dns-localhost detected in the active
+  config); surfaced in Diagnostics under **iOS hazards (auto-fixed before start)**.
+
 ## [0.1.0-beta.31] — 2026-08-12
 
 ### Fixed

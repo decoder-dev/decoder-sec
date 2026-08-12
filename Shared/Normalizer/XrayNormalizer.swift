@@ -132,7 +132,24 @@ enum XrayNormalizer: JSONCoreNormalizer {
             return entry
         }
 
-        if servers.isEmpty { servers = ["1.1.1.1", "8.8.8.8"] }
+        // "localhost" in a Happ/desktop DNS list is usually the domain-agnostic
+        // fallback resolver (matched last, after every domain-scoped entry).
+        // Stripping it can leave e.g. a single `domains: ["geosite:cn"]` server
+        // with nothing to answer any other query — Xray then has no DNS path
+        // at all for the rest of the traffic. Only skip re-adding a default
+        // when a server with no `domains` restriction already covers it.
+        let hasCatchAllServer = servers.contains { entry in
+            if entry is String { return true }
+            if let obj = entry as? [String: Any] {
+                let domains = obj["domains"] as? [Any]
+                return domains == nil || domains?.isEmpty == true
+            }
+            return false
+        }
+        if !hasCatchAllServer {
+            servers.append(contentsOf: ContainerPaths.defaultDNSServers as [Any])
+        }
+
         dnsObj["servers"] = servers
         return dnsObj
     }
@@ -144,8 +161,17 @@ enum XrayNormalizer: JSONCoreNormalizer {
     ) -> [String: Any]? {
         var routing = routing ?? [:]
         var rules = (routing["rules"] as? [[String: Any]]) ?? []
-        routing.removeValue(forKey: "balancers")
+        let balancers = (routing["balancers"] as? [[String: Any]]) ?? []
         let fallbackOutbound = resolveProxyTag(from: outbounds) ?? "direct"
+        // v2rayNG's getBalance() picks a balancer's live outbound at runtime
+        // from its `selector` tag-prefix list (health-checked by observatory).
+        // We have no reliable observatory on iOS, so resolve once here — but
+        // still respect `selector` per balancer, otherwise a Happ config with
+        // a dedicated "whitelist" balancer next to the main "proxy" balancer
+        // would collapse both onto the same outbound and silently drop the
+        // whitelist-lv2/lv3 routing intent.
+        let balancerOutbounds = resolveBalancerOutbounds(balancers, outbounds: outbounds, fallback: fallbackOutbound)
+        routing.removeValue(forKey: "balancers")
 
         rules = rules.compactMap { rule -> [String: Any]? in
             var copy = rule
@@ -153,7 +179,7 @@ enum XrayNormalizer: JSONCoreNormalizer {
 
             if let balancerTag = copy["balancerTag"] as? String, !balancerTag.isEmpty {
                 copy.removeValue(forKey: "balancerTag")
-                copy["outboundTag"] = fallbackOutbound
+                copy["outboundTag"] = balancerOutbounds[balancerTag] ?? fallbackOutbound
             }
 
             if stripGeoRules {
@@ -214,6 +240,36 @@ enum XrayNormalizer: JSONCoreNormalizer {
     private static func looksLikeCatchAll(_ rule: [String: Any]) -> Bool {
         let hasForward = rule["outboundTag"] != nil || rule["balancerTag"] != nil
         return hasForward && !ruleHasSelectors(rule)
+    }
+
+    /// Maps each `balancers[].tag` to a single concrete outbound tag, honoring
+    /// `selector` (a list of tag prefixes, e.g. `["whitelist-"]`) when present
+    /// so multi-balancer configs keep routing distinct traffic to distinct
+    /// outbound pools instead of everything falling back to `proxy`.
+    private static func resolveBalancerOutbounds(
+        _ balancers: [[String: Any]],
+        outbounds: [[String: Any]],
+        fallback: String
+    ) -> [String: String] {
+        let tags = outbounds.compactMap { $0["tag"] as? String }
+        var map: [String: String] = [:]
+        for balancer in balancers {
+            guard let tag = balancer["tag"] as? String, !tag.isEmpty else { continue }
+            let selectors = (balancer["selector"] as? [Any])?.compactMap { $0 as? String } ?? []
+            guard !selectors.isEmpty else {
+                map[tag] = fallback
+                continue
+            }
+            if selectors.contains("proxy"), tags.contains("proxy") {
+                map[tag] = "proxy"
+                continue
+            }
+            let match = tags.first { candidate in
+                selectors.contains { prefix in !prefix.isEmpty && candidate.hasPrefix(prefix) }
+            }
+            map[tag] = match ?? fallback
+        }
+        return map
     }
 
     private static func resolveProxyTag(from outbounds: [[String: Any]]) -> String? {

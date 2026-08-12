@@ -158,6 +158,16 @@ Polling: `TunnelManager.refreshCoreStatus` / `captureStartupFailureReason` с ba
 
 ## 8. Приоритеты доработок
 
+### P0 (beta.32)
+
+- [x] `EvcoreStartCore`/`SetResourcesPath`/`StopAll` на отдельном `coreQueue` — `handleAppMessage`
+      больше не стоит в очереди позади зависшего/медленного старта ядра.
+- [x] Retry с `stripGeoRules: true`, когда `EvcoreStartCore` падает на отсутствующей geosite/geoip
+      категории (файл есть, категории нет — Xray падает сразу, не по таймауту).
+- [x] Balancer flatten учитывает `selector` каждого balancer (как v2rayNG `getBalance()`), а не всегда
+      `proxy`.
+- [x] DNS sanitize не оставляет конфиг без catch-all резолвера после strip `localhost`.
+
 ### P0 (beta.26)
 
 - [x] Убрать geo pre-warm из app (`TunnelManager`) — бесполезен для NE.
@@ -194,8 +204,74 @@ Polling: `TunnelManager.refreshCoreStatus` / `captureStartupFailureReason` с ba
 | **v2rayNG** | `geoip.dat` / `geosite.dat` in APK assets → `SettingsManager.initAssets()` copies to app data on first launch | Same: bundle in appex, `seedBundledGeoIfNeeded` into extension container |
 | **decoder sec.** (beta.29+) | `ThirdParty/geo/` in Packet Tunnel bundle, roscomvpn lists | Strip geo only when bundled + container both miss files |
 | **decoder sec.** (beta.30+) | dual `EvcoreStartCore`: minimal JSON first, hardened fallback | Matches libv2ray «load config as provider gave it» |
+| **decoder sec.** (beta.32+) | file-exists check is not enough — retry with `stripGeoRules` forced when Xray reports a missing category | v2rayN/2dust issue trackers: unknown geosite/geoip category is a **hard fail**, not a soft warning |
 
 Upstream [Everywhere](https://github.com/NodePassProject/Everywhere) uses App Group + user-managed Resources — we keep inline config but adopted Android-style **bundled geo seed**.
+
+### 11.1 What `getV2rayCustomConfig` actually does (and why we still diverge)
+
+`V2rayConfigManager.getV2rayCustomConfig` — the v2rayNG path for a full provider-supplied JSON
+config (Happ's use case) — does almost nothing to the JSON: it checks for an existing `tun` inbound
+and injects one from a template if absent, then hands the config to Xray-core **unmodified**.
+Balancers, `observatory`/`burstObservatory`, DNS `localhost`, and routing rules pass through as-is.
+That is safe on Android because:
+
+- Xray-core's JSON loader (`infra/conf`, the same loader `EverywhereCore.StartCore` calls via
+  `core.StartInstance("json", …)`) treats balancer/observatory identically on every platform — that
+  part is not an Android-only allowance.
+- Android's `TAG_BALANCER` flow (`getBalance()`) is only exercised for v2rayNG's own **built-in**
+  multi-server load-balancing UI, not for custom/Happ configs — so in practice Android never has to
+  prove observatory probing is reliable from inside a locked-down network-extension-style sandbox.
+
+We still flatten balancers on iOS (per this doc's P0/P1 decisions) because the iOS case that
+actually failed — Happ's `"Обход глушилок"` config — combines a balancer with DNS `localhost`, and
+we have no field evidence that Xray's observatory probes complete reliably before
+`NEPacketTunnelProvider`'s ~30s startup budget elapses inside the sandboxed NE process. Flattening to
+a fixed, selector-aware outbound (§11.2) is the defensively safe choice; it is a decoder sec.
+iOS-specific hardening layer, not something Android needed.
+
+### 11.2 EverywhereCore internals (`go/core.go`, `go/resources.go`, `go/xray.go`)
+
+- `SetResourcesPath(path)` does **`os.Setenv("xray.location.asset", path)`** (same env var
+  `AndroidLibXrayLite.InitCoreEnv` sets) **and `os.Chdir(path)`** — sing-box's relative
+  `geoip.path`/`geosite.path`/`rule_set[].path` resolve against CWD, so the resources directory
+  must exist before this call. `PacketTunnelProvider.prepareConfig` already creates it first.
+- `StartCore` holds a single package-level `sync.Mutex` for its **entire** duration, including the
+  underlying `core.StartInstance` call — `StopAll()` takes the same mutex, so a genuinely wedged
+  `EvcoreStartCore` also blocks a concurrent `EvcoreStopAll`. This is exactly why `coreQueue`
+  (§4.1) matters: it keeps that wedge off the queue `handleAppMessage` needs, even though the Go
+  side itself can't be preempted.
+- `xray.go` only sets `xray.tun.fd` and calls `core.StartInstance("json", …)` — no special-casing
+  for balancer/observatory/DNS. Any Xray-side hard failure (missing geosite category, unparseable
+  DNS entry) surfaces as the literal `infra/conf` error string; §4.2 matches on that text.
+
+## 12. `startTunnel` threading (beta.32)
+
+```mermaid
+sequenceDiagram
+    participant iOS as iOS (NEProvider queue)
+    participant PTP as PacketTunnelProvider
+    participant CQ as coreQueue
+    participant EV as EverywhereCore (cgo, blocking)
+    participant App as Host app (IPC)
+
+    iOS->>PTP: startTunnel(options)
+    PTP->>PTP: decode + prepareConfig + setTunnelNetworkSettings
+    PTP->>CQ: async bootCore(...)
+    Note over PTP,iOS: startTunnel's own closure returns —<br/>NEProvider queue is free again
+    CQ->>EV: EvcoreStartCore (sync, can hang)
+    App->>PTP: sendProviderMessage("diagnostics")
+    PTP->>App: handleAppMessage answers immediately (stateLock snapshot)
+    EV-->>CQ: returns (ok / error) or watchdog fires first
+    CQ->>iOS: completionHandler(nil)
+```
+
+Before beta.32, `bootCore`'s body ran inline inside `setTunnelNetworkSettings`'s completion closure —
+on the same queue the system uses to deliver `handleAppMessage`. A hung or slow `EvcoreStartCore`
+therefore also starved every `sendProviderMessage` call from the app: Diagnostics could not learn
+*why* the core wasn't running because it could not talk to the extension **at all**. Moving the Evcore
+calls to `coreQueue` and guarding the shared state (`coreStarted`, `coreError`, `geoStripped`, …) with
+`stateLock` fixes that independent of whether the underlying hang itself is ever fixed upstream.
 
 
 ```
