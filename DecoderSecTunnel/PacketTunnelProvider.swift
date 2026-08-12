@@ -134,17 +134,16 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let raw = payload.configContent
         if payload.coreType == .xray {
             let dir = EVCore.resourcesURL(for: .xray)
-            GeoResourceBootstrap.tryEnsurePresent(forConfig: raw, in: dir)
-            do {
-                try GeoResourceBootstrap.ensurePresentBlocking(forConfig: raw, in: dir)
-            } catch {
-                TunnelLogBuffer.shared.append("geo download failed: \(error.localizedDescription)")
-            }
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let status = GeoResourceBootstrap.status(forConfig: raw, in: dir)
             let stripGeo = !status.isReady
             geoStripped = stripGeo
             if stripGeo, let missing = status.missingSummary {
                 TunnelLogBuffer.shared.append("missing geo (\(missing)) — stripping geosite/geoip rules")
+                // Never block startTunnel on geo download — iOS kills the extension (~30s budget).
+                DispatchQueue.global(qos: .utility).async {
+                    GeoResourceBootstrap.tryEnsurePresent(forConfig: raw, in: dir)
+                }
             } else if status.needsGeoip || status.needsGeosite {
                 TunnelLogBuffer.shared.append("geo resources ready")
             }

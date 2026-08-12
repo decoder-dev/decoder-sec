@@ -4,6 +4,12 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.25] — 2026-08-12
+
+### Fixed
+- **«Connection failed before the tunnel came up»** — Packet Tunnel больше не блокирует `startTunnel` на скачивании geo (до 45s); geo strip сразу, download в фоне
+- Реальная ошибка extension теперь подтягивается из **Log console** / diagnostics вместо generic-сообщения
+
 ## [0.1.0-beta.24] — 2026-08-12
 
 ### Fixed

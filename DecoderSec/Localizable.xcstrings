@@ -3609,6 +3609,28 @@
           }
         }
       }
+    },
+    "Connection failed before the tunnel came up. Open Log console in Settings for details.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection failed before the tunnel came up. Open Log console in Settings for details."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключение не удалось до старта туннеля. Откройте «Консоль логов» в Настройках."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隧道启动前连接失败。请在设置中打开「日志控制台」查看详情。"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

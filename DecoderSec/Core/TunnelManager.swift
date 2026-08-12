@@ -302,9 +302,47 @@ final class TunnelManager: ObservableObject {
             return
         }
 
-        if lastError == nil {
-            lastError = String(localized: "Connection failed before the tunnel came up. Open Diagnostics for details.")
+        captureStartupFailureReason()
+    }
+
+    /// startVPNTunnel returns before the extension finishes startTunnel — surface NE logs/errors here.
+    private func captureStartupFailureReason() {
+        refreshLogs()
+        refreshCoreStatus(retries: 3)
+
+        func resolve(from attempt: Int) {
+            guard lastError == nil else { return }
+            if let coreError = tunnelDiagnostics.coreError, !coreError.isEmpty {
+                lastError = coreError
+                return
+            }
+            if let line = tunnelLogs.last(where: { logLineLooksLikeFailure($0) }) {
+                lastError = line
+                return
+            }
+            if attempt >= 4 {
+                lastError = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self else { return }
+                self.refreshLogs()
+                self.refreshCoreStatus(retries: 2)
+                resolve(from: attempt + 1)
+            }
         }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            resolve(from: 0)
+        }
+    }
+
+    private func logLineLooksLikeFailure(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        return lower.contains("failed")
+            || lower.contains("missing")
+            || lower.contains("error")
+            || lower.contains("could not")
     }
 
     private func scheduleTransitionTimeout(for status: NEVPNStatus) {
@@ -334,7 +372,7 @@ final class TunnelManager: ObservableObject {
     }
 
     func refreshLogs() {
-        queryTunnelMessage(type: "logs", retries: 2) { [weak self] json in
+        queryTunnelMessage(type: "logs", retries: 3) { [weak self] json in
             guard let self else { return }
             if let lines = json["lines"] as? [String] {
                 self.tunnelLogs = lines
