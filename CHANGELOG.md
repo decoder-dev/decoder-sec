@@ -17,6 +17,14 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.21] — 2026-08-12
+
+### Fixed
+- **VPN connected / Core running: no / Last error: —** — ошибка ядра больше не теряется при disconnect; явный флаг `coreStarted`; IPC всегда отдаёт текст ошибки
+- Конфиги Happ с `geosite:`/`geoip:` и balancer: best-effort скачивание `.dat`, иначе **strip geo-правил** + flatten balancer → catch-all на `proxy`
+- DNS: убран `localhost`/`127.0.0.1` из Xray DNS (ломал старт без локального DNS inbound)
+- Diagnostics: поле **Geo rules stripped**, geo-статус по конфигу сессии
+
 ## [0.1.0-beta.20] — 2026-08-12
 
 ### Fixed

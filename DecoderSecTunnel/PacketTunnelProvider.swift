@@ -2,12 +2,8 @@
 //  PacketTunnelProvider.swift
 //  DecoderSec
 //
-//  Receives the full config from the app via providerConfiguration / start options.
-//  No App Groups, no Core Data.
-//
-//  Startup follows NodePassProject/Everywhere: synchronous EvcoreStartCore in the
-//  setTunnelNetworkSettings callback, completionHandler(nil) even when the core
-//  fails (error surfaced via handleAppMessage / diagnostics IPC).
+//  Startup follows NodePassProject/Everywhere: synchronous EvcoreStartCore,
+//  completionHandler(nil) even when the core fails so IPC can report coreError.
 //
 
 import EverywhereCore
@@ -18,8 +14,12 @@ import NetworkExtension
 final class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let tunnelMTU = 1500
 
+    private var coreStarted = false
     private var coreError: String?
     private var resourcesPathError: String?
+    private var lastConfigContent: String?
+    private var lastCoreType: CoreType = .xray
+    private var geoStripped = false
 
     private var pathMonitor: NWPathMonitor?
     private let pathMonitorQueue = DispatchQueue(label: "com.decodersec.app.pathMonitor", qos: .utility)
@@ -28,8 +28,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let pathDebounceInterval: DispatchTimeInterval = .milliseconds(1000)
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+        coreStarted = false
         coreError = nil
         resourcesPathError = nil
+        lastConfigContent = nil
+        geoStripped = false
 
         let providerConfig = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration
 
@@ -40,14 +43,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        lastCoreType = payload.coreType
+        lastConfigContent = payload.configContent
+
         let configContent: String
         do {
-            configContent = try ConfigNormalizer.normalize(
-                payload.configContent,
-                for: payload.coreType,
-                useZashboard: payload.useZashboard
-            )
+            configContent = try prepareConfig(payload)
         } catch {
+            coreError = error.localizedDescription
             completionHandler(error)
             return
         }
@@ -61,16 +64,18 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
             if let error {
+                self.coreError = error.localizedDescription
                 completionHandler(error)
                 return
             }
 
             let fd = TunnelFD.lookup(for: self.packetFlow)
             if fd < 0 {
+                self.coreError = "could not obtain TUN file descriptor"
                 completionHandler(NSError(
                     domain: "DecoderSec",
                     code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: "could not obtain TUN file descriptor"]
+                    userInfo: [NSLocalizedDescriptionKey: self.coreError!]
                 ))
                 return
             }
@@ -83,21 +88,60 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             }
 
             var coreErr: NSError?
-            guard EvcoreStartCore(payload.coreType.rawValue, configContent, Int(fd), Self.tunnelMTU, &coreErr) else {
-                self.coreError = Self.describeCoreError(coreErr)
-                NSLog("DecoderSec: EvcoreStartCore failed: \(self.coreError ?? "unknown")")
+            let started = EvcoreStartCore(
+                payload.coreType.rawValue,
+                configContent,
+                Int(fd),
+                Self.tunnelMTU,
+                &coreErr
+            )
+
+            guard started else {
+                var message = Self.describeCoreError(coreErr)
+                if self.geoStripped {
+                    message += " (geo rules were stripped — missing .dat in extension)"
+                }
+                self.coreStarted = false
+                self.coreError = message
+                NSLog("DecoderSec: EvcoreStartCore failed: \(message)")
                 // Keep NE alive so the app can read coreError via IPC (Everywhere pattern).
                 completionHandler(nil)
                 return
             }
 
+            self.coreStarted = true
+            self.coreError = nil
             self.startPathMonitor()
             completionHandler(nil)
         }
     }
 
+    private func prepareConfig(_ payload: TunnelConfigPayload) throws -> String {
+        if payload.coreType == .xray {
+            let dir = EVCore.resourcesURL(for: .xray)
+            GeoResourceBootstrap.tryEnsurePresent(forConfig: payload.configContent, in: dir)
+            let status = GeoResourceBootstrap.status(forConfig: payload.configContent, in: dir)
+            let stripGeo = !status.isReady
+            geoStripped = stripGeo
+            if stripGeo, let missing = status.missingSummary {
+                NSLog("DecoderSec: missing geo files (\(missing)) — stripping geosite/geoip rules")
+            }
+            return try XrayNormalizer.normalize(
+                payload.configContent,
+                useZashboard: payload.useZashboard,
+                stripGeoRules: stripGeo
+            )
+        }
+        return try ConfigNormalizer.normalize(
+            payload.configContent,
+            for: payload.coreType,
+            useZashboard: payload.useZashboard
+        )
+    }
+
     override func stopTunnel(with _: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         stopPathMonitor()
+        coreStarted = false
 
         let lock = NSLock()
         var didComplete = false
@@ -147,15 +191,21 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private func diagnosticsPayload() -> [String: Any] {
-        var payload: [String: Any] = ["running": coreError == nil]
-        if let err = coreError { payload["error"] = err }
-        payload["resourcesPath"] = EVCore.resourcesURL(for: .xray).path
+        var payload: [String: Any] = [
+            "running": coreStarted,
+            "geoStripped": geoStripped,
+        ]
+        if let err = coreError, !err.isEmpty {
+            payload["error"] = err
+        } else if !coreStarted {
+            payload["error"] = "Core is not running."
+        }
+        payload["resourcesPath"] = EVCore.resourcesURL(for: lastCoreType).path
         if let resourcesPathError {
             payload["resourcesPathError"] = resourcesPathError
         }
 
-        let providerConfig = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration
-        if let config = providerConfig?[TunnelConfigPayload.configContentKey] as? String {
+        if let config = lastConfigContent {
             let geo = GeoResourceBootstrap.status(forConfig: config, in: EVCore.resourcesURL(for: .xray))
             payload["geoNeedsGeoip"] = geo.needsGeoip
             payload["geoNeedsGeosite"] = geo.needsGeosite
@@ -171,9 +221,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private static func describeCoreError(_ error: NSError?) -> String {
         guard let error else { return "Core failed to start." }
-        if !error.localizedDescription.isEmpty {
-            return error.localizedDescription
-        }
+        let text = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty { return text }
         return "Core failed to start (domain \(error.domain), code \(error.code))."
     }
 

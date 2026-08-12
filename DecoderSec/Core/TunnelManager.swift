@@ -19,6 +19,7 @@ struct TunnelDiagnosticsSnapshot: Equatable {
     var geoNeedsGeosite: Bool
     var geoHasGeoip: Bool
     var geoHasGeosite: Bool
+    var geoStripped: Bool
 
     static let empty = TunnelDiagnosticsSnapshot(
         coreRunning: false,
@@ -28,7 +29,8 @@ struct TunnelDiagnosticsSnapshot: Equatable {
         geoNeedsGeoip: false,
         geoNeedsGeosite: false,
         geoHasGeoip: false,
-        geoHasGeosite: false
+        geoHasGeosite: false,
+        geoStripped: false
     )
 }
 
@@ -82,7 +84,8 @@ final class TunnelManager: ObservableObject {
             if on {
                 didConnect = false
                 coreRunning = false
-                tunnelDiagnostics = .empty
+                lastError = nil
+                // Keep previous diagnostics until the new session reports.
                 let m = try await ensureManager(configuration: configuration)
                 let payload = TunnelConfigPayload(
                     configContent: configuration.content,
@@ -95,9 +98,7 @@ final class TunnelManager: ObservableObject {
             } else {
                 pendingReconnect = false
                 coreRunning = false
-                tunnelDiagnostics = .empty
                 try await disableTunnel()
-                lastError = nil
             }
         } catch {
             lastError = Self.userFacingError(error)
@@ -147,12 +148,14 @@ final class TunnelManager: ObservableObject {
         queryTunnelMessage(type: "diagnostics", retries: retries) { [weak self] json in
             guard let self else { return }
             let running = json["running"] as? Bool ?? false
-            let error = json["error"] as? String
+            let error = (json["error"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             self.coreRunning = running
             if let error, !error.isEmpty {
                 self.lastError = error
             } else if running {
                 self.lastError = nil
+            } else if self.lastError == nil {
+                self.lastError = "Core is not running."
             }
             self.tunnelDiagnostics = TunnelDiagnosticsSnapshot(
                 coreRunning: running,
@@ -162,10 +165,17 @@ final class TunnelManager: ObservableObject {
                 geoNeedsGeoip: json["geoNeedsGeoip"] as? Bool ?? false,
                 geoNeedsGeosite: json["geoNeedsGeosite"] as? Bool ?? false,
                 geoHasGeoip: json["geoHasGeoip"] as? Bool ?? false,
-                geoHasGeosite: json["geoHasGeosite"] as? Bool ?? false
+                geoHasGeosite: json["geoHasGeosite"] as? Bool ?? false,
+                geoStripped: json["geoStripped"] as? Bool ?? false
             )
+            // Keep the tunnel up briefly when core failed so Diagnostics can show the error.
+            // User can disconnect manually; we only auto-stop after a short delay.
             if self.status == .connected, !running {
-                Task { try? await self.disableTunnel() }
+                Task {
+                    try? await Task.sleep(nanoseconds: 8_000_000_000)
+                    guard self.status == .connected, !self.coreRunning else { return }
+                    try? await self.disableTunnel()
+                }
             }
         }
     }
@@ -233,10 +243,10 @@ final class TunnelManager: ObservableObject {
                 self.trackConnectFailures(previous: previous, current: connection.status)
                 if connection.status == .connected {
                     self.didConnect = true
-                    self.refreshCoreStatus(retries: 3)
+                    self.refreshCoreStatus(retries: 5)
                 } else {
                     self.coreRunning = false
-                    self.tunnelDiagnostics = .empty
+                    // Do not wipe tunnelDiagnostics / lastError on disconnect — user needs them.
                     if (connection.status == .disconnected || connection.status == .invalid)
                         && self.pendingReconnect {
                         self.pendingReconnect = false

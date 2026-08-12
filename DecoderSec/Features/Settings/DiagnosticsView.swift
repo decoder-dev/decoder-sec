@@ -17,8 +17,15 @@ struct DiagnosticsView: View {
             }
 
             Section("Geo resources") {
-                row("Needs geoip.dat", geoRow(tunnel.tunnelDiagnostics.geoNeedsGeoip, tunnel.tunnelDiagnostics.geoHasGeoip))
-                row("Needs geosite.dat", geoRow(tunnel.tunnelDiagnostics.geoNeedsGeosite, tunnel.tunnelDiagnostics.geoHasGeosite))
+                row("Needs geoip.dat", geoRow(
+                    tunnel.tunnelDiagnostics.geoNeedsGeoip || (snapshot?.usesGeoRules == true),
+                    tunnel.tunnelDiagnostics.geoHasGeoip
+                ))
+                row("Needs geosite.dat", geoRow(
+                    tunnel.tunnelDiagnostics.geoNeedsGeosite || (snapshot?.usesGeoRules == true),
+                    tunnel.tunnelDiagnostics.geoHasGeosite
+                ))
+                row("Geo rules stripped", tunnel.tunnelDiagnostics.geoStripped ? "yes" : "no")
                 if let path = tunnel.tunnelDiagnostics.resourcesPath {
                     row("Extension resources path", path)
                 }
