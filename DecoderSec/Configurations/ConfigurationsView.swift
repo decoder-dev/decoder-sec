@@ -53,14 +53,21 @@ struct ConfigurationsView: View {
         }
         .overlay {
             if store.configurationsForSelectedCore.isEmpty {
-                ContentUnavailableView {
-                    Label(String(localized: "No configurations"), systemImage: "doc.badge.plus")
-                } description: {
+                VStack(spacing: 10) {
+                    Image(systemName: "doc.badge.plus")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.secondary)
+                    Text(String(localized: "No configurations"))
+                        .font(.headline)
                     Text(String(localized: "Create one, import a file, or add a subscription."))
-                } actions: {
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                     Button(String(localized: "Subscribe")) { showSubscribe = true }
                         .buttonStyle(.borderedProminent)
+                        .padding(.top, 4)
                 }
+                .padding(20)
             }
         }
         .navigationTitle("\(store.selectedCore.displayName) configurations")

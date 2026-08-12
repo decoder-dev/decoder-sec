@@ -12,7 +12,7 @@ struct SettingsView: View {
     @ObservedObject private var tunnel = TunnelManager.shared
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     HStack(spacing: 14) {
@@ -72,7 +72,9 @@ struct SettingsView: View {
                     } label: {
                         Label(String(localized: "Acknowledgements"), systemImage: "heart")
                     }
-                    LabeledContent(String(localized: "Version")) {
+                    HStack {
+                        Text(String(localized: "Version"))
+                        Spacer()
                         Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
                             .font(Brand.Font.mono(12))
                             .foregroundStyle(Brand.Color.secondaryText)
@@ -84,10 +86,23 @@ struct SettingsView: View {
             }
             .background(Brand.Color.void)
             .navigationTitle(String(localized: "Settings"))
-            .scrollContentBackground(.hidden)
-            .onChange(of: appState.alwaysOnEnabled) { _, newValue in
+            .modifier(HideScrollBackgroundIfAvailable())
+            .onChange(of: appState.alwaysOnEnabled) { newValue in
                 Task { await tunnel.applyAlwaysOn(newValue) }
             }
         }
+        .navigationViewStyle(.stack)
+    }
+}
+
+
+private struct HideScrollBackgroundIfAvailable: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content.scrollContentBackground(.hidden)
+        } else {
+            content
+        }
+        .navigationViewStyle(.stack)
     }
 }

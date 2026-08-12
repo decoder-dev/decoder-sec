@@ -27,16 +27,16 @@ struct TunnelSettingsView: View {
         .navigationTitle("Tunnel")
         .navigationBarTitleDisplayMode(.inline)
         .disabled(tunnel.pendingReconnect)
-        .onChange(of: appState.tunnelIncludeAllNetworks) { _, _ in
+        .onChange(of: appState.tunnelIncludeAllNetworks) { _ in
             Task { await tunnel.reconnect() }
         }
-        .onChange(of: appState.tunnelIncludeLocalNetworks) { _, _ in
+        .onChange(of: appState.tunnelIncludeLocalNetworks) { _ in
             Task { await tunnel.reconnect() }
         }
-        .onChange(of: appState.tunnelIncludeAPNs) { _, _ in
+        .onChange(of: appState.tunnelIncludeAPNs) { _ in
             Task { await tunnel.reconnect() }
         }
-        .onChange(of: appState.tunnelIncludeCellularServices) { _, _ in
+        .onChange(of: appState.tunnelIncludeCellularServices) { _ in
             Task { await tunnel.reconnect() }
         }
     }

@@ -9,6 +9,12 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.11] — 2026-08-12
+
+### Fixed
+- Восстановлена совместимость установки: minimum iOS возвращён на **15.0** (beta.10 требовал iOS 17)
+- UI-полировка из beta.10 сохранена, но без iOS17-only API (совместимо с iOS 15/16)
+
 ## [0.1.0-beta.10] — 2026-08-11
 
 ### Changed

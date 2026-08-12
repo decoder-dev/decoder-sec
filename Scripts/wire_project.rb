@@ -12,7 +12,7 @@ require 'xcodeproj'
 PROJECT_PATH       = File.expand_path('../DecoderSec.xcodeproj', __dir__)
 DASHBOARD_REL_PATH = 'ThirdParty/zashboard'
 DASHBOARD_NAME     = 'zashboard'
-DEPLOYMENT_TARGET  = '17.0'
+DEPLOYMENT_TARGET  = '15.0'
 SHARED_FOLDER      = 'Shared'
 
 # Override via env to point a fork of EverywhereCore during CI/local builds.

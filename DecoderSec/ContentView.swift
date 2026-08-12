@@ -39,9 +39,9 @@ struct ContentView: View {
             }
         }
         .brandTheme()
-        .animation(.snappy(duration: 0.28), value: tunnel.coreRunning)
-        .animation(.snappy(duration: 0.28), value: minimized)
-        .onChange(of: tunnel.coreRunning) { _, running in
+        .animation(.default, value: tunnel.coreRunning)
+        .animation(.default, value: minimized)
+        .onChange(of: tunnel.coreRunning) { running in
             if !running { minimized = false }
         }
         .overlay(alignment: .top) {

@@ -15,7 +15,7 @@ struct SubscribeSheet: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             VStack(alignment: .leading, spacing: 20) {
                 Text(String(localized: "Paste a subscription URL, happ://crypt… link, or vless:// node."))
                     .font(Brand.Font.body(15))
@@ -66,8 +66,8 @@ struct SubscribeSheet: View {
             }
             .onAppear { focused = true }
         }
-        .presentationDetents([.medium, .large])
         .brandTheme()
+        .navigationViewStyle(.stack)
     }
 
     @MainActor

@@ -6,18 +6,18 @@ Working plan to take the client from **beta** to a polished daily-driver on mode
 
 | Choice | Decision |
 |--------|----------|
-| Minimum OS | **iOS 17** (NavigationStack, ContentUnavailableView, modern `onChange`) |
+| Minimum OS | **iOS 15** (sideload compatibility) |
 | Design target | **iOS 26** look & feel where APIs exist; graceful fallbacks on 17–18 |
 | Distribution | Single full `DecoderSec.ipa` (ESign) → TestFlight when certs exist |
 
-We do **not** raise the floor to iOS 26-only — that would lock out most sideload users. We *design for* 26 and ship on 17+.
+We do **not** raise the floor to iOS 26-only — that would lock out most sideload users. We *design for* 26 and ship on 15+.
 
 ## Phases
 
 ### 1 — Foundation (this sprint)
 - [x] Document Ideal roadmap
-- [x] Deployment target → iOS 17
-- [x] `NavigationStack` everywhere
+- [x] Deployment target kept at iOS 15 (install compatibility)
+- [x] Modern nav style where possible (with iOS 15 compatibility)
 - [x] Brand tokens: expressive type, surfaces, motion (keep OLED + neon — not purple/cream AI defaults)
 - [x] Home empty state + clear CTA to import / subscribe
 - [x] Subscribe sheet (https + `happ://crypt…`) via SwiftUI, not UIKit-only

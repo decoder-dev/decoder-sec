@@ -18,7 +18,7 @@ struct HomeView: View {
     @State private var heroAppeared = false
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 Brand.Color.void.ignoresSafeArea()
                 ambientBackground
@@ -47,7 +47,6 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, 24)
                 }
-                .scrollIndicators(.hidden)
             }
             .toolbar(.hidden, for: .navigationBar)
             .alert(String(localized: "Tunnel is running"), isPresented: $coreSwitchBlocked) {
@@ -74,6 +73,7 @@ struct HomeView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - Sections
@@ -145,7 +145,6 @@ struct HomeView: View {
                 .font(Brand.Font.mono(12, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(Brand.Color.secondaryText)
-                .contentTransition(.numericText())
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

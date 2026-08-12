@@ -63,7 +63,7 @@ struct DNSSettingsView: View {
             }
         }
         .onAppear { loadInitial() }
-        .onChange(of: isEditing) { _, newValue in
+        .onChange(of: isEditing) { newValue in
             if newValue {
                 serverDrafts.append(DNSServerDraft(value: ""))
             } else {

@@ -49,8 +49,8 @@ on both targets for the framework to load and the Go runtime to find
 its DNS resolver. The wire script is idempotent, so running it after
 an Xcode UI edit reasserts them.
 
-- `IPHONEOS_DEPLOYMENT_TARGET = 17.0` — Ideal roadmap floor (NavigationStack, ContentUnavailableView). Upstream
-  Everywhere may still list 15; we intentionally raise for modern SwiftUI.
+- `IPHONEOS_DEPLOYMENT_TARGET = 15.0` — install compatibility floor for sideload users.
+  We keep modern UI where possible, but avoid iOS17-only APIs in shared views.
   `EverywhereCore`'s `Package.swift` requires `.iOS(.v15)`, so this is
   the floor.
 - `libresolv.tbd` linked into both `DecoderSec` and `DecoderSecTunnel` —
