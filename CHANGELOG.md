@@ -4,6 +4,18 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.37] — 2026-08-12
+
+### Added
+- **Always-boot tier (Xray)**: after ios-safe + geo-strip, Packet Tunnel builds a **minimal** config
+  (one proxy outbound + tun + `1.1.1.1`/`8.8.8.8` + catch-all) and tries up to 3 outbounds.
+  Watchdog hangs also recover via minimal boot so Core can still reach running.
+- Diagnostics: **Minimal boot** flag when the guarantee path was used.
+
+### Goal
+- Make `EvcoreStartCore` succeed whenever the subscription JSON contains ≥1 usable proxy outbound
+  (Happ routing may be simplified). Does not cover missing Packet Tunnel signing / empty config / no TUN fd.
+
 ## [0.1.0-beta.36] — 2026-08-12
 
 ### Changed

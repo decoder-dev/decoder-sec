@@ -22,6 +22,7 @@ struct TunnelDiagnosticsSnapshot: Equatable {
     var geoHasGeoip: Bool
     var geoHasGeosite: Bool
     var geoStripped: Bool
+    var minimalBoot: Bool
     var sessionSeconds: Int?
     var hazards: [String]
 
@@ -37,6 +38,7 @@ struct TunnelDiagnosticsSnapshot: Equatable {
         geoHasGeoip: false,
         geoHasGeosite: false,
         geoStripped: false,
+        minimalBoot: false,
         sessionSeconds: nil,
         hazards: []
     )
@@ -229,6 +231,7 @@ final class TunnelManager: ObservableObject {
                 geoHasGeoip: json["geoHasGeoip"] as? Bool ?? false,
                 geoHasGeosite: json["geoHasGeosite"] as? Bool ?? false,
                 geoStripped: json["geoStripped"] as? Bool ?? false,
+                minimalBoot: json["minimalBoot"] as? Bool ?? false,
                 sessionSeconds: json["sessionSeconds"] as? Int,
                 hazards: json["hazards"] as? [String] ?? []
             )
@@ -460,7 +463,7 @@ final class TunnelManager: ObservableObject {
             if attempt >= 4 {
                 let extensionSilent = !tunnelLogs.contains(where: { !$0.contains("[app]") })
                 if extensionSilent {
-                    lastError = String(localized: "Packet Tunnel did not start (no extension logs). Large config is now passed via VPN profile only — reinstall 0.1.0 (36), or check NE signing in ESign.")
+                    lastError = String(localized: "Packet Tunnel did not start (no extension logs). Large config is now passed via VPN profile only — reinstall 0.1.0 (37), or check NE signing in ESign.")
                     ClientLogBuffer.shared.append("FATAL: extension never logged — likely killed before startTunnel or wrong PacketTunnel bundle id")
                 } else {
                     lastError = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")

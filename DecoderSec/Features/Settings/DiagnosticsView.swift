@@ -45,6 +45,7 @@ struct DiagnosticsView: View {
                     tunnel.tunnelDiagnostics.geoHasGeosite
                 ))
                 row(String(localized: "Geo rules stripped"), boolText(tunnel.tunnelDiagnostics.geoStripped))
+                row(String(localized: "Minimal boot"), boolText(tunnel.tunnelDiagnostics.minimalBoot))
                 if let path = tunnel.tunnelDiagnostics.resourcesPath {
                     row(String(localized: "Extension resources path"), path)
                 }

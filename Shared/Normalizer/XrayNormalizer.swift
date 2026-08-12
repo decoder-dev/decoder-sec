@@ -81,6 +81,64 @@ enum XrayNormalizer: JSONCoreNormalizer {
         return try serializeJSON(root)
     }
 
+    /// Absolute boot guarantee for Packet Tunnel: one proxy outbound + tun +
+    /// public DNS + catch-all. No geo, balancers, observatory, or localhost DNS.
+    /// Returns up to `limit` configs (preferred tags first) so the caller can
+    /// try the next node if Xray rejects a broken outbound definition.
+    static func minimalBootConfigs(from content: String, limit: Int = 3) throws -> [(tag: String, json: String)] {
+        let root = try parseJSONObject(content)
+        let outbounds = (root["outbounds"] as? [[String: Any]]) ?? []
+        let candidates = usableProxyOutbounds(from: outbounds)
+        guard !candidates.isEmpty else {
+            throw NormalizeError.parseFailed("no usable proxy outbound for minimal boot")
+        }
+
+        var results: [(tag: String, json: String)] = []
+        for outbound in candidates.prefix(max(1, limit)) {
+            var proxy = outbound
+            proxy.removeValue(forKey: "burstObservatory")
+            proxy.removeValue(forKey: "observatory")
+            let tag = {
+                let t = (proxy["tag"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return t.isEmpty ? "proxy" : t
+            }()
+            proxy["tag"] = tag
+
+            let config: [String: Any] = [
+                "log": ["loglevel": "warning"],
+                "dns": [
+                    "servers": ["1.1.1.1", "8.8.8.8"],
+                    "queryStrategy": "UseIPv4",
+                ],
+                "inbounds": [[
+                    "tag": decoderTunTag,
+                    "protocol": "tun",
+                    "settings": ["name": "utun", "MTU": tunnelMTU],
+                    "sniffing": [
+                        "enabled": true,
+                        "destOverride": ["http", "tls", "quic"],
+                        "routeOnly": false,
+                    ],
+                ]],
+                "outbounds": [
+                    proxy,
+                    ["tag": "direct", "protocol": "freedom"],
+                    ["tag": "block", "protocol": "blackhole"],
+                ],
+                "routing": [
+                    "domainStrategy": "AsIs",
+                    "rules": [[
+                        "type": "field",
+                        "network": "tcp,udp",
+                        "outboundTag": tag,
+                    ]],
+                ],
+            ]
+            results.append((tag: tag, json: try serializeJSON(config)))
+        }
+        return results
+    }
+
     /// Features that break or hang Xray on iOS Packet Tunnel if left as-is.
     /// Fast path: Shared/C `ds_config_scan` (no JSON parse). Refine with JSON when needed.
     static func iosHazards(in content: String) -> [String] {
@@ -367,14 +425,35 @@ enum XrayNormalizer: JSONCoreNormalizer {
         return firstUsableOutboundTag(from: outbounds, skipWhitelist: false)
     }
 
-    private static func firstUsableOutboundTag(from outbounds: [[String: Any]], skipWhitelist: Bool) -> String? {
+    /// Ordered proxy candidates for minimal boot (preferred tags first).
+    private static func usableProxyOutbounds(from outbounds: [[String: Any]]) -> [[String: Any]] {
+        var preferred: [[String: Any]] = []
+        var normal: [[String: Any]] = []
+        var whitelist: [[String: Any]] = []
+
         for item in outbounds {
             guard let tag = item["tag"] as? String, !tag.isEmpty else { continue }
             let lower = tag.lowercased()
-            if skipWhitelist && lower.hasPrefix("whitelist-") { continue }
             if lower == "direct" || lower == "block" || lower == "dns_out" || lower == "dns-out" { continue }
             let proto = (item["protocol"] as? String)?.lowercased() ?? ""
-            if proto == "freedom" || proto == "blackhole" { continue }
+            if proto == "freedom" || proto == "blackhole" || proto == "dns" { continue }
+            if proto.isEmpty { continue }
+
+            if lower == "proxy" || lower.hasPrefix("proxy-") {
+                preferred.append(item)
+            } else if lower.hasPrefix("whitelist-") {
+                whitelist.append(item)
+            } else {
+                normal.append(item)
+            }
+        }
+        return preferred + normal + whitelist
+    }
+
+    private static func firstUsableOutboundTag(from outbounds: [[String: Any]], skipWhitelist: Bool) -> String? {
+        for item in usableProxyOutbounds(from: outbounds) {
+            guard let tag = item["tag"] as? String, !tag.isEmpty else { continue }
+            if skipWhitelist && tag.lowercased().hasPrefix("whitelist-") { continue }
             return tag
         }
         return nil
