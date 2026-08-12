@@ -492,9 +492,10 @@ final class TunnelManager: ObservableObject {
               previous == .connecting,
               current == .disconnected || current == .disconnecting else { return }
 
-        if let disconnectError = captureLastDisconnectError() {
+        fetchLastDisconnectError { [weak self] disconnectError in
+            guard let self, let disconnectError else { return }
             ClientLogBuffer.shared.append("NEVPNConnection.lastDisconnectError: \(disconnectError)")
-            mergeClientLogsIntoConsole()
+            self.mergeClientLogsIntoConsole()
         }
 
         if let m = manager, m.isOnDemandEnabled {
@@ -509,19 +510,31 @@ final class TunnelManager: ObservableObject {
         updateLifecyclePhase()
     }
 
-    /// `NEVPNConnection.lastDisconnectError` (iOS 16+) carries the system's
-    /// own reason for the most recent disconnect — often the only concrete
-    /// signal we get when the appex is refused launch entirely (e.g. a
-    /// missing Network Extension entitlement after an ESign resign).
-    private func captureLastDisconnectError() -> String? {
-        guard let connection = manager?.connection else { return nil }
-        if #available(iOS 16.0, *) {
-            guard let error = connection.lastDisconnectError else { return nil }
-            let nsError = error as NSError
-            let text = nsError.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-            return text.isEmpty ? "\(nsError.domain) code=\(nsError.code)" : text
+    /// `NEVPNConnection.fetchLastDisconnectError` (iOS 16+) carries the
+    /// system's own reason for the most recent disconnect — often the only
+    /// concrete signal we get when the appex is refused launch entirely
+    /// (e.g. a missing Network Extension entitlement after an ESign resign).
+    /// Completion-handler based Apple API; always resolves on the main queue.
+    private func fetchLastDisconnectError(_ completion: @escaping (String?) -> Void) {
+        guard let connection = manager?.connection else {
+            completion(nil)
+            return
         }
-        return nil
+        guard #available(iOS 16.0, *) else {
+            completion(nil)
+            return
+        }
+        connection.fetchLastDisconnectError { error in
+            DispatchQueue.main.async {
+                guard let error else {
+                    completion(nil)
+                    return
+                }
+                let nsError = error as NSError
+                let text = nsError.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+                completion(text.isEmpty ? "\(nsError.domain) code=\(nsError.code)" : text)
+            }
+        }
     }
 
     /// startVPNTunnel returns before the extension finishes startTunnel — surface NE logs/errors here.
@@ -547,33 +560,36 @@ final class TunnelManager: ObservableObject {
             }
             if attempt >= 4 {
                 let extensionSilent = !tunnelLogs.contains(where: { !$0.contains("[app]") })
-                let disconnectError = captureLastDisconnectError()
-                if extensionSilent {
-                    // Dual start fallback: some ESign resigns drop
-                    // `providerConfiguration` off the persisted profile, so
-                    // the lean options (no inline config) leave the
-                    // extension with nothing to decode and it never logs.
-                    // Retry once with the full inline options before giving
-                    // up, for configs small enough for the XPC launch path.
-                    if attemptFullOptionsFallback() { return }
-                    var message = String(localized: "Packet Tunnel did not start. In ESign: sign the FULL IPA with a paid certificate that has Network Extension / packet-tunnel for BOTH the app and the .appex (free Apple ID cannot run VPN). Then delete the old app, install again, allow the VPN profile.")
-                    if let disconnectError {
-                        message += " " + String(localized: "System reported: \(disconnectError)")
+                fetchLastDisconnectError { [weak self] disconnectError in
+                    guard let self else { return }
+                    if extensionSilent {
+                        // Dual start fallback: some ESign resigns drop
+                        // `providerConfiguration` off the persisted profile,
+                        // so the lean options (no inline config) leave the
+                        // extension with nothing to decode and it never
+                        // logs. Retry once with the full inline options
+                        // before giving up, for configs small enough for
+                        // the XPC launch path.
+                        if self.attemptFullOptionsFallback() { return }
+                        var message = String(localized: "Packet Tunnel did not start. In ESign: sign the FULL IPA with a paid certificate that has Network Extension / packet-tunnel for BOTH the app and the .appex (free Apple ID cannot run VPN). Then delete the old app, install again, allow the VPN profile.")
+                        if let disconnectError {
+                            message += " " + String(localized: "System reported: \(disconnectError)")
+                        }
+                        self.lastError = message
+                        ClientLogBuffer.shared.append(
+                            "FATAL: extension never logged — \(BundleIdentifiers.extensionPreflightReport()) — check ESign Network Extension entitlement / wrong PacketTunnel bundle id"
+                            + (disconnectError.map { " — lastDisconnectError=\($0)" } ?? "")
+                        )
+                    } else {
+                        var message = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")
+                        if let disconnectError {
+                            message += " (\(disconnectError))"
+                        }
+                        self.lastError = message
                     }
-                    lastError = message
-                    ClientLogBuffer.shared.append(
-                        "FATAL: extension never logged — \(BundleIdentifiers.extensionPreflightReport()) — check ESign Network Extension entitlement / wrong PacketTunnel bundle id"
-                        + (disconnectError.map { " — lastDisconnectError=\($0)" } ?? "")
-                    )
-                } else {
-                    var message = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")
-                    if let disconnectError {
-                        message += " (\(disconnectError))"
-                    }
-                    lastError = message
+                    self.mergeClientLogsIntoConsole()
+                    self.updateLifecyclePhase()
                 }
-                mergeClientLogsIntoConsole()
-                updateLifecyclePhase()
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
@@ -643,19 +659,21 @@ final class TunnelManager: ObservableObject {
         refreshLogs()
         refreshCoreStatus(retries: 1)
         let extensionSilent = !tunnelLogs.contains(where: { !$0.contains("[app]") })
-        let disconnectError = captureLastDisconnectError()
-        var probe = "connect watchdog 15s: status=\(status.rawValue) extensionSilent=\(extensionSilent)"
-        if let disconnectError { probe += " lastDisconnectError=\(disconnectError)" }
-        ClientLogBuffer.shared.append(probe)
-        mergeClientLogsIntoConsole()
+        fetchLastDisconnectError { [weak self] disconnectError in
+            guard let self else { return }
+            var probe = "connect watchdog 15s: status=\(self.status.rawValue) extensionSilent=\(extensionSilent)"
+            if let disconnectError { probe += " lastDisconnectError=\(disconnectError)" }
+            ClientLogBuffer.shared.append(probe)
+            self.mergeClientLogsIntoConsole()
 
-        guard extensionSilent, lastError == nil else { return }
-        var message = String(localized: "Packet Tunnel has not started after 15s and produced no logs — likely a missing Network Extension / packet-tunnel entitlement on the .appex in this ESign resign. You can keep waiting or disconnect and re-sign with a certificate that includes Network Extension for BOTH the app and the .appex.")
-        if let disconnectError {
-            message += " " + String(localized: "System reported: \(disconnectError)")
+            guard extensionSilent, self.lastError == nil else { return }
+            var message = String(localized: "Packet Tunnel has not started after 15s and produced no logs — likely a missing Network Extension / packet-tunnel entitlement on the .appex in this ESign resign. You can keep waiting or disconnect and re-sign with a certificate that includes Network Extension for BOTH the app and the .appex.")
+            if let disconnectError {
+                message += " " + String(localized: "System reported: \(disconnectError)")
+            }
+            self.lastError = message
+            self.updateLifecyclePhase()
         }
-        lastError = message
-        updateLifecyclePhase()
     }
 
     /// Merge app-side connect logs into the console so empty extension logs are still useful.
