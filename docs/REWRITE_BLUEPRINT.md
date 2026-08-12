@@ -314,6 +314,15 @@ type-safety refactor, not a protocol change. It also establishes the pattern
 Phase 2/3 protocol seams will follow (one small typed contract per boundary,
 introduced without moving or renaming anything else in the same PR).
 
+Verified: pushing this slice to `cursor/rewrite-blueprint-7e20` triggered
+`build-ipa.yml` on a macOS GitHub Actions runner — the `macOS IPA` job
+(`./build.sh` + archive + unsigned IPA export/validation for both
+`DecoderSec` and `DecoderSecTunnel`) completed green, confirming the app
+target and the Packet Tunnel extension target both compile against the new
+`Shared/Tunnel/TunnelConfigPayload.swift` and the resulting `.ipa` still
+passes `ci_export_ipa.sh`'s installability checks (appex present, no static
+`EverywhereCore.framework` embed, ad-hoc signature applied).
+
 ## 6. Acceptance checklist before tagging any release cut during/after the rewrite
 
 Run this in full before cutting a tag (`vX.Y.Z` / `vX.Y.Z-beta.N`), and after
