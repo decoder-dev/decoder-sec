@@ -21,10 +21,9 @@ struct SubscribeSheet: View {
                     .font(Brand.Font.body(15))
                     .foregroundStyle(Brand.Color.secondaryText)
 
-                TextField(String(localized: "https://… or happ://crypt5/…"), text: $raw, axis: .vertical)
+                TextField(String(localized: "https://… or happ://crypt5/…"), text: $raw)
                     .font(Brand.Font.mono(13))
                     .foregroundStyle(Brand.Color.primaryText)
-                    .lineLimit(4...8)
                     .padding(14)
                     .brandPanel(cornerRadius: 12)
                     .focused($focused)
