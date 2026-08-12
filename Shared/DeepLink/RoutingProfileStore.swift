@@ -221,11 +221,21 @@ enum HappRoutingApplier {
         ])
 
         // Merge with existing routing instead of replacing everything.
-        // Keep non-Happ rules so provider-specific routing logic survives.
+        // Important: keep provider rules untouched; append Happ catch-all only at the very end.
         var routing = (root["routing"] as? [String: Any]) ?? [:]
         let existingRules = (routing["rules"] as? [[String: Any]]) ?? []
-        let keptExisting = existingRules.filter { !looksLikeManagedHappRule($0, proxyTag: proxyTag, directTag: directTag, blockTag: blockTag) }
-        routing["rules"] = happRules + keptExisting
+
+        // Keep only specific Happ rules before provider rules.
+        // Global catch-all is appended last so it doesn't shadow provider logic.
+        let happSpecificRules = Array(happRules.dropLast())
+        let happCatchAll = happRules.last
+
+        var mergedRules = happSpecificRules + existingRules
+        if let catchAll = happCatchAll, !existingRules.contains(where: looksLikeCatchAllRule) {
+            mergedRules.append(catchAll)
+        }
+        routing["rules"] = mergedRules
+
         if let domainStrategy, !domainStrategy.isEmpty {
             routing["domainStrategy"] = domainStrategy
         } else if routing["domainStrategy"] == nil {
@@ -276,13 +286,21 @@ enum HappRoutingApplier {
         return nil
     }
 
-    private static func looksLikeManagedHappRule(_ rule: [String: Any], proxyTag: String, directTag: String, blockTag: String) -> Bool {
+    private static func looksLikeCatchAllRule(_ rule: [String: Any]) -> Bool {
         guard let type = rule["type"] as? String, type == "field" else { return false }
-        guard let outbound = rule["outboundTag"] as? String else { return false }
-        if outbound == proxyTag || outbound == directTag || outbound == blockTag {
-            return true
-        }
-        return false
+
+        // Typical Xray catch-all patterns used in subscription configs.
+        let hasDomain = (rule["domain"] as? [Any])?.isEmpty == false
+        let hasIP = (rule["ip"] as? [Any])?.isEmpty == false
+        let hasPort = rule["port"] != nil
+        let hasProtocol = rule["protocol"] != nil
+        let hasInboundTag = rule["inboundTag"] != nil
+        let hasProcess = rule["process"] != nil
+
+        // If rule has no specific selectors and forwards by outbound/balancer,
+        // it is effectively a catch-all.
+        let hasForward = rule["outboundTag"] != nil || rule["balancerTag"] != nil
+        return hasForward && !hasDomain && !hasIP && !hasPort && !hasProtocol && !hasInboundTag && !hasProcess
     }
 
     private static func stringArray(_ any: Any?) -> [String] {

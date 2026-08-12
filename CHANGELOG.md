@@ -17,6 +17,13 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.16] — 2026-08-12
+
+### Fixed
+- Дополнительный фикс Happ routing: catch-all правило больше не перекрывает правила провайдера
+- Существующие `routing.rules` из подписки сохраняются полностью; Happ-правила добавляются безопасно
+- Если в подписке уже есть свой catch-all (включая `balancerTag`), второй не добавляется
+
 ## [0.1.0-beta.15] — 2026-08-12
 
 ### Fixed
