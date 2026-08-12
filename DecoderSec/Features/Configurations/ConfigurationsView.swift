@@ -265,14 +265,16 @@ struct ConfigurationsView: View {
     }
 
     private func updateSubscription(_ config: Configuration) {
-        guard let raw = config.sourceURL, let url = URL(string: raw) else { return }
+        guard let raw = config.sourceURL else { return }
         isDownloading = true
         Task { @MainActor in
             defer { isDownloading = false }
             do {
+                let url = try SubscriptionURLResolver.resolve(raw)
                 let result = try await SubscriptionImporter.fetch(from: url)
-                let content = try applyRoutingIfNeeded(content: result.content, core: config.coreType)
+                let content = applyRoutingIfNeeded(content: result.content, core: config.coreType)
                 store.update(config, content: content)
+                syncAdditionalProfiles(from: result, base: config, resolvedURL: url.absoluteString)
             } catch {
                 importErrorMessage = error.localizedDescription
             }
@@ -303,29 +305,49 @@ struct ConfigurationsView: View {
             isDownloading = false
         }
 
-        var failCount = 0
+        var failures: [(name: String, reason: String)] = []
         for config in targets {
             do {
-                guard let raw = config.sourceURL, let url = URL(string: raw) else { continue }
+                guard let raw = config.sourceURL else { continue }
+                let url = try SubscriptionURLResolver.resolve(raw)
                 let result = try await SubscriptionImporter.fetch(from: url)
-                let content = try applyRoutingIfNeeded(content: result.content, core: config.coreType)
+                let content = applyRoutingIfNeeded(content: result.content, core: config.coreType)
                 store.update(config, content: content)
+                syncAdditionalProfiles(from: result, base: config, resolvedURL: url.absoluteString)
             } catch {
-                failCount += 1
+                failures.append((config.name, error.localizedDescription))
             }
         }
 
-        if failCount > 0 {
-            importErrorMessage = String(localized: "Some subscriptions failed to refresh (\(failCount)).")
+        if !failures.isEmpty {
+            let grouped = Dictionary(grouping: failures, by: \.reason)
+            let summary = grouped.map { reason, items in
+                "\(items.count)× \(reason)"
+            }.joined(separator: "\n")
+            importErrorMessage = String(localized: "Some subscriptions failed to refresh (\(failures.count)).\n\(summary)")
+        }
+    }
+
+    private func syncAdditionalProfiles(from result: SubscriptionImporter.Result, base: Configuration, resolvedURL: String) {
+        guard !result.additionalConfigs.isEmpty else { return }
+        for extra in result.additionalConfigs {
+            let content = applyRoutingIfNeeded(content: extra.content, core: base.coreType)
+            if let existing = store.configurations.first(where: {
+                $0.sourceURL == resolvedURL && $0.name == extra.name && $0.coreType == base.coreType
+            }) {
+                store.update(existing, content: content)
+            } else {
+                store.create(name: extra.name, type: base.coreType, content: content, sourceURL: resolvedURL)
+            }
         }
     }
 
 
-    private func applyRoutingIfNeeded(content: String, core: CoreType) throws -> String {
+    private func applyRoutingIfNeeded(content: String, core: CoreType) -> String {
         guard core == .xray, routing.routingEnabled, let profile = routing.activeProfile else {
             return content
         }
-        return try HappRoutingApplier.apply(profile: profile, toXrayJSON: content)
+        return (try? HappRoutingApplier.apply(profile: profile, toXrayJSON: content)) ?? content
     }
 
     private func derivedName(from url: URL) -> String {

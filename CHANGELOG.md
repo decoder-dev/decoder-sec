@@ -17,6 +17,14 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.20] — 2026-08-12
+
+### Fixed
+- **Tunnel timeout** — Packet Tunnel снова следует паттерну [NodePassProject/Everywhere](https://github.com/NodePassProject/Everywhere): синхронный `EvcoreStartCore`, `completionHandler(nil)` при ошибке ядра (ошибка через IPC)
+- `TunnelFD` — retry + выбор последнего `utun` (sing-box/WireGuard pattern)
+- **Подписки (26 failed)** — `SubscriptionURLResolver` (happwn): decrypt `happ://crypt*` при refresh; HWID headers `x-hwid-max-devices-reached` / `x-hwid-limit`; группировка ошибок bulk refresh
+- Routing apply при refresh больше не валит всю подписку (`try?`)
+
 ## [0.1.0-beta.19] — 2026-08-12
 
 ### Fixed

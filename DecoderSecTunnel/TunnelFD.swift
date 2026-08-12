@@ -16,11 +16,40 @@ enum TunnelFD {
     private static let sysprotoControl: Int32 = 2
     private static let utunOptIfname: Int32 = 2
 
-    static func lookup(for _: NEPacketTunnelFlow) -> Int32 {
-        for fd in Int32(0)..<1024 {
-            if isUtunSocket(fd) { return fd }
+    static func lookup(for _: NEPacketTunnelFlow, maxAttempts: Int = 12, delayMs: Int = 50) -> Int32 {
+        for attempt in 0..<maxAttempts {
+            if let fd = scanUtunFDs() { return fd }
+            if attempt + 1 < maxAttempts {
+                usleep(useconds_t(delayMs * 1000))
+            }
         }
         return -1
+    }
+
+    private static func scanUtunFDs() -> Int32? {
+        var best: Int32?
+        var bestIndex = -1
+        for fd in Int32(0)..<1024 where isUtunSocket(fd) {
+            if let idx = utunIndex(for: fd), idx >= bestIndex {
+                bestIndex = idx
+                best = fd
+            } else if best == nil {
+                best = fd
+            }
+        }
+        return best
+    }
+
+    private static func utunIndex(for fd: Int32) -> Int? {
+        var nameBuf = [CChar](repeating: 0, count: 96)
+        var nameLen = socklen_t(nameBuf.count)
+        let optRes = nameBuf.withUnsafeMutableBufferPointer { buf in
+            getsockopt(fd, sysprotoControl, utunOptIfname, buf.baseAddress, &nameLen)
+        }
+        guard optRes == 0 else { return nil }
+        let name = String(cString: nameBuf)
+        guard name.hasPrefix("utun") else { return nil }
+        return Int(name.dropFirst(4)) ?? 0
     }
 
     private static func isUtunSocket(_ fd: Int32) -> Bool {
@@ -31,7 +60,6 @@ enum TunnelFD {
                 getpeername(fd, sa, &saLen)
             }
         }
-        // sockaddr layout: [sa_len(1), sa_family(1), sa_data(...)]
         guard getRes == 0, saBuf[1] == afSystem else { return false }
 
         var nameBuf = [CChar](repeating: 0, count: 96)

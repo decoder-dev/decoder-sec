@@ -19,6 +19,8 @@ enum SubscriptionImporter {
 
     static func fetch(from url: URL) async throws -> Result {
         var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 20
         request.setValue("*/*", forHTTPHeaderField: "Accept")
         DeviceIdentity.applySubscriptionHeaders(to: &request)
 
@@ -33,12 +35,8 @@ enum SubscriptionImporter {
             )
         }
 
-        if let http, isHWIDRejected(http: http) {
-            throw NSError(
-                domain: "SubscriptionImporter",
-                code: -11,
-                userInfo: [NSLocalizedDescriptionKey: String(localized: "This subscription requires a device ID (HWID). The panel rejected the request — ask your provider to allow this app, or import the config in Happ once so the device is registered.")]
-            )
+        if let http, let hwidError = hwidPanelError(http: http, body: data) {
+            throw hwidError
         }
 
         var routingHeader: String?
@@ -55,6 +53,14 @@ enum SubscriptionImporter {
             )
         }
         text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if text.isEmpty, let http, let announce = panelAnnounce(http: http) {
+            throw NSError(
+                domain: "SubscriptionImporter",
+                code: -13,
+                userInfo: [NSLocalizedDescriptionKey: announce]
+            )
+        }
 
         // Whole body may be base64 of the real body.
         if !text.contains("://"), !text.hasPrefix("{"), !text.hasPrefix("["),
@@ -160,13 +166,42 @@ enum SubscriptionImporter {
         )
     }
 
-    private static func isHWIDRejected(http: HTTPURLResponse) -> Bool {
-        if let flag = http.value(forHTTPHeaderField: "x-hwid-not-supported")
-            ?? http.value(forHTTPHeaderField: "X-Hwid-Not-Supported") {
-            let v = flag.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if v == "true" || v == "1" || v == "yes" { return true }
+    private static func hwidPanelError(http: HTTPURLResponse, body: Data) -> NSError? {
+        if headerTruthy(http, "x-hwid-not-supported") || headerTruthy(http, "X-Hwid-Not-Supported") {
+            return NSError(
+                domain: "SubscriptionImporter",
+                code: -11,
+                userInfo: [NSLocalizedDescriptionKey: String(localized: "This subscription requires a device ID (HWID). The panel rejected the request — ask your provider to allow this app, or import the config in Happ once so the device is registered.")]
+            )
         }
-        return false
+        if headerTruthy(http, "x-hwid-max-devices-reached")
+            || headerTruthy(http, "X-Hwid-Max-Devices-Reached")
+            || headerTruthy(http, "x-hwid-limit")
+            || headerTruthy(http, "X-Hwid-Limit") {
+            let announce = panelAnnounce(http: http)
+            return NSError(
+                domain: "SubscriptionImporter",
+                code: -14,
+                userInfo: [NSLocalizedDescriptionKey: announce ?? String(localized: "Device limit reached on the subscription panel. Remove an old device in your provider dashboard.")]
+            )
+        }
+        return nil
+    }
+
+    private static func headerTruthy(_ http: HTTPURLResponse, _ name: String) -> Bool {
+        guard let raw = http.value(forHTTPHeaderField: name) else { return false }
+        let v = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return v == "true" || v == "1" || v == "yes" || v == "on"
+    }
+
+    private static func panelAnnounce(http: HTTPURLResponse) -> String? {
+        if let a = http.value(forHTTPHeaderField: "announce"), !a.isEmpty { return a }
+        if let a = http.value(forHTTPHeaderField: "Announce"), !a.isEmpty { return a }
+        return nil
+    }
+
+    private static func isHWIDRejected(http: HTTPURLResponse) -> Bool {
+        headerTruthy(http, "x-hwid-not-supported") || headerTruthy(http, "X-Hwid-Not-Supported")
     }
 
     private static func looksLikeUnsupportedDummy(_ text: String) -> Bool {

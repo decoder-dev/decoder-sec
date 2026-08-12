@@ -47,7 +47,7 @@ final class TunnelManager: ObservableObject {
     private var didConnect: Bool = false
 
     private var transitionTimeoutTask: Task<Void, Never>?
-    private static let transitionTimeoutNanos: UInt64 = 45 * 1_000_000_000
+    private static let transitionTimeoutNanos: UInt64 = 35 * 1_000_000_000
 
     private init() {
         setupStatusObserver()
@@ -250,12 +250,19 @@ final class TunnelManager: ObservableObject {
 
     private func trackConnectFailures(previous: NEVPNStatus, current: NEVPNStatus) {
         guard !didConnect,
-              let m = manager, m.isOnDemandEnabled,
               previous == .connecting,
               current == .disconnected || current == .disconnecting else { return }
-        Task { try? await self.disableTunnel() }
+
+        if let m = manager, m.isOnDemandEnabled {
+            Task { try? await self.disableTunnel() }
+            if lastError == nil {
+                lastError = "Connection failed. On-demand was disabled — re-enable the tunnel to retry."
+            }
+            return
+        }
+
         if lastError == nil {
-            lastError = "Connection failed. On-demand was disabled — re-enable the tunnel to retry."
+            lastError = String(localized: "Connection failed before the tunnel came up. Open Diagnostics for details.")
         }
     }
 

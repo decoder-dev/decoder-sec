@@ -5,6 +5,10 @@
 //  Receives the full config from the app via providerConfiguration / start options.
 //  No App Groups, no Core Data.
 //
+//  Startup follows NodePassProject/Everywhere: synchronous EvcoreStartCore in the
+//  setTunnelNetworkSettings callback, completionHandler(nil) even when the core
+//  fails (error surfaced via handleAppMessage / diagnostics IPC).
+//
 
 import EverywhereCore
 import Network
@@ -13,13 +17,9 @@ import NetworkExtension
 @objc(PacketTunnelProvider)
 final class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let tunnelMTU = 1500
-    private static let coreStartupTimeout: TimeInterval = 25
 
-    private var coreStarted = false
     private var coreError: String?
     private var resourcesPathError: String?
-
-    private let startupQueue = DispatchQueue(label: "com.decodersec.tunnel.startup", qos: .userInitiated)
 
     private var pathMonitor: NWPathMonitor?
     private let pathMonitorQueue = DispatchQueue(label: "com.decodersec.app.pathMonitor", qos: .utility)
@@ -28,16 +28,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let pathDebounceInterval: DispatchTimeInterval = .milliseconds(1000)
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        coreStarted = false
         coreError = nil
         resourcesPathError = nil
-
-        let finish = StartCompletionGuard(completionHandler)
 
         let providerConfig = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration
 
         guard let payload = TunnelConfigPayload.decode(options: options, providerConfiguration: providerConfig) else {
-            finish.fail(NSError(domain: "DecoderSec", code: -2, userInfo: [
+            completionHandler(NSError(domain: "DecoderSec", code: -2, userInfo: [
                 NSLocalizedDescriptionKey: "missing configContent — start the tunnel from the app once"
             ]))
             return
@@ -51,26 +48,26 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 useZashboard: payload.useZashboard
             )
         } catch {
-            finish.fail(error)
+            completionHandler(error)
             return
         }
 
         let settings = Self.makeTunnelSettings(mtu: Self.tunnelMTU, dnsServers: payload.dnsServers)
         setTunnelNetworkSettings(settings) { [weak self] error in
-            if let error {
-                finish.fail(error)
-                return
-            }
             guard let self else {
-                finish.fail(NSError(domain: "DecoderSec", code: -5, userInfo: [
+                completionHandler(NSError(domain: "DecoderSec", code: -5, userInfo: [
                     NSLocalizedDescriptionKey: "Tunnel provider deallocated during startup."
                 ]))
+                return
+            }
+            if let error {
+                completionHandler(error)
                 return
             }
 
             let fd = TunnelFD.lookup(for: self.packetFlow)
             if fd < 0 {
-                finish.fail(NSError(
+                completionHandler(NSError(
                     domain: "DecoderSec",
                     code: -1,
                     userInfo: [NSLocalizedDescriptionKey: "could not obtain TUN file descriptor"]
@@ -85,67 +82,22 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 NSLog("DecoderSec: SetResourcesPath failed: \(resErr)")
             }
 
-            self.startupQueue.asyncAfter(deadline: .now() + Self.coreStartupTimeout) {
-                finish.fail(NSError(domain: "DecoderSec", code: -6, userInfo: [
-                    NSLocalizedDescriptionKey: "Core startup timed out after \(Int(Self.coreStartupTimeout)) seconds."
-                ]))
+            var coreErr: NSError?
+            guard EvcoreStartCore(payload.coreType.rawValue, configContent, Int(fd), Self.tunnelMTU, &coreErr) else {
+                self.coreError = Self.describeCoreError(coreErr)
+                NSLog("DecoderSec: EvcoreStartCore failed: \(self.coreError ?? "unknown")")
+                // Keep NE alive so the app can read coreError via IPC (Everywhere pattern).
+                completionHandler(nil)
+                return
             }
 
-            self.startupQueue.async { [weak self] in
-                guard let self else {
-                    finish.fail(NSError(domain: "DecoderSec", code: -5, userInfo: [
-                        NSLocalizedDescriptionKey: "Tunnel provider deallocated during startup."
-                    ]))
-                    return
-                }
-
-                if payload.coreType == .xray {
-                    do {
-                        try GeoResourceBootstrap.ensurePresentBlocking(
-                            forConfig: configContent,
-                            in: EVCore.resourcesURL(for: .xray)
-                        )
-                    } catch {
-                        let message = "Geo resources: \(error.localizedDescription)"
-                        self.coreError = message
-                        finish.fail(NSError(domain: "DecoderSec", code: -3, userInfo: [
-                            NSLocalizedDescriptionKey: message
-                        ]))
-                        return
-                    }
-                }
-
-                var coreErr: NSError?
-                let started = EvcoreStartCore(
-                    payload.coreType.rawValue,
-                    configContent,
-                    Int(fd),
-                    Self.tunnelMTU,
-                    &coreErr
-                )
-
-                guard started else {
-                    let message = Self.describeCoreError(coreErr)
-                    self.coreStarted = false
-                    self.coreError = message
-                    NSLog("DecoderSec: EvcoreStartCore failed: \(message)")
-                    finish.fail(NSError(domain: "DecoderSec", code: -4, userInfo: [
-                        NSLocalizedDescriptionKey: message
-                    ]))
-                    return
-                }
-
-                self.coreStarted = true
-                self.coreError = nil
-                self.startPathMonitor()
-                finish.success()
-            }
+            self.startPathMonitor()
+            completionHandler(nil)
         }
     }
 
     override func stopTunnel(with _: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         stopPathMonitor()
-        coreStarted = false
 
         let lock = NSLock()
         var didComplete = false
@@ -187,23 +139,16 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
         switch type {
-        case "core-status":
-            completionHandler?(Self.encodeJSON(coreStatusPayload()))
-        case "diagnostics":
+        case "core-status", "diagnostics":
             completionHandler?(Self.encodeJSON(diagnosticsPayload()))
         default:
             completionHandler?(nil)
         }
     }
 
-    private func coreStatusPayload() -> [String: Any] {
-        var response: [String: Any] = ["running": coreStarted]
-        if let err = coreError { response["error"] = err }
-        return response
-    }
-
     private func diagnosticsPayload() -> [String: Any] {
-        var payload = coreStatusPayload()
+        var payload: [String: Any] = ["running": coreError == nil]
+        if let err = coreError { payload["error"] = err }
         payload["resourcesPath"] = EVCore.resourcesURL(for: .xray).path
         if let resourcesPathError {
             payload["resourcesPathError"] = resourcesPathError
@@ -291,32 +236,5 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             path.isConstrained,
             &err
         )
-    }
-}
-
-/// Calls the NE start completion handler at most once.
-private final class StartCompletionGuard {
-    private let lock = NSLock()
-    private var didFinish = false
-    private let handler: (Error?) -> Void
-
-    init(_ handler: @escaping (Error?) -> Void) {
-        self.handler = handler
-    }
-
-    func success() {
-        finish(error: nil)
-    }
-
-    func fail(_ error: Error) {
-        finish(error: error)
-    }
-
-    private func finish(error: Error?) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !didFinish else { return }
-        didFinish = true
-        handler(error)
     }
 }
