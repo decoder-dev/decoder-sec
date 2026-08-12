@@ -59,14 +59,14 @@ final class TunnelManager: ObservableObject {
             if on {
                 didConnect = false
                 let m = try await ensureManager(configuration: configuration)
-                let options: [String: NSObject] = [
-                    "configContent": configuration.content as NSString,
-                    "configID": configuration.id.uuidString as NSString,
-                    "coreType": configuration.coreType.rawValue as NSString,
-                    "dnsServers": AppState.shared.dnsServers as NSArray,
-                    "useZashboard": NSNumber(value: AppState.shared.useZashboardEnabled),
-                ]
-                try m.connection.startVPNTunnel(options: options)
+                let payload = TunnelConfigPayload(
+                    configContent: configuration.content,
+                    configID: configuration.id.uuidString,
+                    coreType: configuration.coreType,
+                    dnsServers: AppState.shared.dnsServers,
+                    useZashboard: AppState.shared.useZashboardEnabled
+                )
+                try m.connection.startVPNTunnel(options: payload.asStartOptions)
             } else {
                 pendingReconnect = false
                 try await disableTunnel()
@@ -121,13 +121,13 @@ final class TunnelManager: ObservableObject {
         proto.providerBundleIdentifier = EVCore.Identifier.networkExtension
         proto.serverAddress = BrandIdentity.displayName
         // Full payload so NE (and on-demand restarts) need no shared store.
-        proto.providerConfiguration = [
-            "configContent": configuration.content,
-            "configID": configuration.id.uuidString,
-            "coreType": configuration.coreType.rawValue,
-            "dnsServers": AppState.shared.dnsServers,
-            "useZashboard": AppState.shared.useZashboardEnabled,
-        ]
+        proto.providerConfiguration = TunnelConfigPayload(
+            configContent: configuration.content,
+            configID: configuration.id.uuidString,
+            coreType: configuration.coreType,
+            dnsServers: AppState.shared.dnsServers,
+            useZashboard: AppState.shared.useZashboardEnabled
+        ).asProviderConfiguration
         proto.includeAllNetworks = AppState.shared.tunnelIncludeAllNetworks
         proto.excludeLocalNetworks = !AppState.shared.tunnelIncludeLocalNetworks
         if #available(iOS 16.4, *) {

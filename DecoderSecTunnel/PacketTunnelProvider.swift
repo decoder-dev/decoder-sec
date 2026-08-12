@@ -23,42 +23,28 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private static let pathDebounceInterval: DispatchTimeInterval = .milliseconds(1000)
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        let providerConfig = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration ?? [:]
+        let providerConfig = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration
 
-        let coreTypeRaw = (options?["coreType"] as? String)
-            ?? (providerConfig["coreType"] as? String)
-            ?? CoreType.xray.rawValue
-        let coreType = CoreType(rawValue: coreTypeRaw) ?? .xray
-
-        let dnsServers = Self.cleanDNS(
-            (options?["dnsServers"] as? [String]) ?? (providerConfig["dnsServers"] as? [String])
-        )
-
-        let useZashboard = (options?["useZashboard"] as? NSNumber)?.boolValue
-            ?? (providerConfig["useZashboard"] as? Bool)
-            ?? true
-
-        let rawContent = (options?["configContent"] as? String)
-            ?? (providerConfig["configContent"] as? String)
+        guard let payload = TunnelConfigPayload.decode(options: options, providerConfiguration: providerConfig) else {
+            completionHandler(NSError(domain: "DecoderSec", code: -2, userInfo: [
+                NSLocalizedDescriptionKey: "missing configContent — start the tunnel from the app once"
+            ]))
+            return
+        }
 
         let configContent: String
         do {
-            guard let rawContent, !rawContent.isEmpty else {
-                throw NSError(domain: "DecoderSec", code: -2, userInfo: [
-                    NSLocalizedDescriptionKey: "missing configContent — start the tunnel from the app once"
-                ])
-            }
             configContent = try ConfigNormalizer.normalize(
-                rawContent,
-                for: coreType,
-                useZashboard: useZashboard
+                payload.configContent,
+                for: payload.coreType,
+                useZashboard: payload.useZashboard
             )
         } catch {
             completionHandler(error)
             return
         }
 
-        let settings = Self.makeTunnelSettings(mtu: Self.tunnelMTU, dnsServers: dnsServers)
+        let settings = Self.makeTunnelSettings(mtu: Self.tunnelMTU, dnsServers: payload.dnsServers)
         setTunnelNetworkSettings(settings) { [weak self] error in
             guard let self else { return }
             if let error {
@@ -76,14 +62,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
 
-            let resPath = EVCore.resourcesURL(for: coreType).path
+            let resPath = EVCore.resourcesURL(for: payload.coreType).path
             var resErr: NSError?
             if !EvcoreSetResourcesPath(resPath, &resErr), let resErr {
                 NSLog("DecoderSec: SetResourcesPath failed: \(resErr)")
             }
 
             var coreErr: NSError?
-            guard EvcoreStartCore(coreType.rawValue, configContent, Int(fd), Self.tunnelMTU, &coreErr) else {
+            guard EvcoreStartCore(payload.coreType.rawValue, configContent, Int(fd), Self.tunnelMTU, &coreErr) else {
                 self.coreError = coreErr?.localizedDescription ?? "core failed to start"
                 completionHandler(nil)
                 return
@@ -163,11 +149,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         settings.dnsSettings = NEDNSSettings(servers: dnsServers)
         settings.mtu = NSNumber(value: mtu)
         return settings
-    }
-
-    private static func cleanDNS(_ raw: [String]?) -> [String] {
-        let trimmed = (raw ?? []).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        return trimmed.isEmpty ? ["1.1.1.1", "8.8.8.8"] : trimmed
     }
 
     private func startPathMonitor() {

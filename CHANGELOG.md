@@ -4,6 +4,14 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+### Changed
+- Rewrite blueprint: `docs/REWRITE_BLUEPRINT.md` — target module structure,
+  migration sequence, compatibility constraints, and release checklist.
+- Internal: app ↔ Packet Tunnel config handoff now goes through a single
+  typed `TunnelConfigPayload` (`Shared/Tunnel/TunnelConfigPayload.swift`)
+  instead of hand-rolled dictionaries in `TunnelManager` and
+  `PacketTunnelProvider`. No behavior or wire-format change.
+
 ### Planned
 - Subscription UX (node list / one-tap connect)
 - In-app log console
