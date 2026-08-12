@@ -4,6 +4,15 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.35] — 2026-08-12
+
+### Changed
+- **C helpers for heavy tunnel work** (`Shared/C/`):
+  - `ds_utun_lookup_fd` — utun FD scan (was Swift Darwin loop)
+  - `ds_config_scan` — fast geosite/geoip/localhost/balancer token scan without JSON parse
+  - `ds_copy_file` — POSIX seed copy for bundled geo `.dat`
+- Swift wrappers: `TunnelFD`, `GeoResourceBootstrap`, `XrayNormalizer.iosHazards`
+
 ## [0.1.0-beta.34] — 2026-08-12
 
 ### Fixed

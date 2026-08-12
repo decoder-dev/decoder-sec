@@ -284,5 +284,24 @@ end
   target.file_system_synchronized_groups << shared_group
 end
 
+# --- C helpers + Swift bridging header (Shared/C) ------------------------
+# Heavy utun FD scan + config token scan live in C; Swift calls via bridging.
+BRIDGING_HEADER = 'Shared/C/DecoderSec-Bridging-Header.h'
+HEADER_SEARCH   = '$(SRCROOT)/Shared/C'
+[app_target, ne_target].each do |target|
+  target.build_configurations.each do |config|
+    config.build_settings['SWIFT_OBJC_BRIDGING_HEADER'] = BRIDGING_HEADER
+    paths = config.build_settings['HEADER_SEARCH_PATHS']
+    paths = case paths
+            when Array then paths.dup
+            when String then [paths]
+            else ['$(inherited)']
+            end
+    paths << HEADER_SEARCH unless paths.include?(HEADER_SEARCH)
+    config.build_settings['HEADER_SEARCH_PATHS'] = paths
+  end
+end
+
 project.save
-puts "Wired EverywhereCore (>= #{EVERYWHERE_CORE_MIN_VERSION}, SwiftPM) + Runestone + zashboard + geo into #{PROJECT_PATH}"
+puts "Wired EverywhereCore (>= #{EVERYWHERE_CORE_MIN_VERSION}, SwiftPM) + Runestone + zashboard + geo + C helpers into #{PROJECT_PATH}"
+puts "Bridging header → #{BRIDGING_HEADER}"

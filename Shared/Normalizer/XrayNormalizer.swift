@@ -10,6 +10,7 @@
 //
 
 import Foundation
+import Darwin
 
 enum XrayNormalizer: JSONCoreNormalizer {
     private static let logFloor = "warning"
@@ -72,18 +73,37 @@ enum XrayNormalizer: JSONCoreNormalizer {
     }
 
     /// Features that break or hang Xray on iOS Packet Tunnel if left as-is.
+    /// Fast path: Shared/C `ds_config_scan` (no JSON parse). Refine with JSON when needed.
     static func iosHazards(in content: String) -> [String] {
-        guard let root = try? parseJSONObject(content) else { return ["unparseable"] }
         var hazards: [String] = []
+        let flags = content.withCString { ptr -> UInt32 in
+            ds_config_scan(ptr, strlen(ptr))
+        }
+        if (flags & UInt32(DS_SCAN_BALANCER)) != 0 { hazards.append("balancers") }
+        if (flags & UInt32(DS_SCAN_OBSERVATORY)) != 0 { hazards.append("observatory") }
+        if (flags & UInt32(DS_SCAN_LOCALHOST)) != 0 { hazards.append("dns-localhost") }
+
+        // JSON refine for balancerTag-only / unparseable edge cases.
+        guard let root = try? parseJSONObject(content) else {
+            if hazards.isEmpty { return ["unparseable"] }
+            return hazards
+        }
         let routing = root["routing"] as? [String: Any] ?? [:]
-        if routing["balancers"] != nil { hazards.append("balancers") }
+        if routing["balancers"] != nil, !hazards.contains("balancers") {
+            hazards.append("balancers")
+        }
         let rules = routing["rules"] as? [[String: Any]] ?? []
-        if rules.contains(where: { ($0["balancerTag"] as? String)?.isEmpty == false }) {
+        if rules.contains(where: { ($0["balancerTag"] as? String)?.isEmpty == false }),
+           !hazards.contains("balancerTag") {
             hazards.append("balancerTag")
         }
-        if root["observatory"] != nil { hazards.append("observatory") }
-        if root["burstObservatory"] != nil { hazards.append("burstObservatory") }
-        if dnsHasLocalhost(root["dns"]) { hazards.append("dns-localhost") }
+        if root["observatory"] != nil || root["burstObservatory"] != nil,
+           !hazards.contains("observatory") {
+            hazards.append("observatory")
+        }
+        if dnsHasLocalhost(root["dns"]), !hazards.contains("dns-localhost") {
+            hazards.append("dns-localhost")
+        }
         return hazards
     }
 

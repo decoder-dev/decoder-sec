@@ -5,6 +5,8 @@
 
 import Foundation
 
+// Darwin strlen for C scan helpers.
+import Darwin
 enum GeoResourceBootstrap {
     static let geoipFileName = "geoip.dat"
     static let geositeFileName = "geosite.dat"
@@ -103,34 +105,41 @@ enum GeoResourceBootstrap {
             guard !fm.fileExists(atPath: dest.path) else { continue }
             guard let bundled = Bundle.main.url(forResource: name, withExtension: nil, subdirectory: "geo")
                 ?? Bundle.main.url(forResource: name, withExtension: nil) else { continue }
-            do {
-                try fm.copyItem(at: bundled, to: dest)
+            if ds_copy_file(bundled.path, dest.path) == 0 {
                 copied = true
-            } catch {
-                continue
+            } else {
+                do {
+                    try fm.copyItem(at: bundled, to: dest)
+                    copied = true
+                } catch {
+                    continue
+                }
             }
         }
         return copied
     }
 
     static func referencesGeoip(_ configJSON: String) -> Bool {
+        let flags = configJSON.withCString { ptr -> UInt32 in
+            ds_config_scan(ptr, strlen(ptr))
+        }
+        if (flags & UInt32(DS_SCAN_GEOIP)) != 0 { return true }
+        // Structured fallback when token appears only after JSON transforms.
         if routingRuleValues(in: configJSON, keys: ["ip"]).contains(where: isGeoipToken) {
             return true
         }
-        if dnsDomainValues(in: configJSON).contains(where: isGeoipToken) {
-            return true
-        }
-        return configJSON.lowercased().contains("geoip:")
+        return dnsDomainValues(in: configJSON).contains(where: isGeoipToken)
     }
 
     static func referencesGeosite(_ configJSON: String) -> Bool {
+        let flags = configJSON.withCString { ptr -> UInt32 in
+            ds_config_scan(ptr, strlen(ptr))
+        }
+        if (flags & UInt32(DS_SCAN_GEOSITE)) != 0 { return true }
         if routingRuleValues(in: configJSON, keys: ["domain"]).contains(where: isGeositeToken) {
             return true
         }
-        if dnsDomainValues(in: configJSON).contains(where: isGeositeToken) {
-            return true
-        }
-        return configJSON.lowercased().contains("geosite:")
+        return dnsDomainValues(in: configJSON).contains(where: isGeositeToken)
     }
 
     // MARK: - Parsing
