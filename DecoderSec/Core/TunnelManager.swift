@@ -20,6 +20,7 @@ struct TunnelDiagnosticsSnapshot: Equatable {
     var geoHasGeoip: Bool
     var geoHasGeosite: Bool
     var geoStripped: Bool
+    var sessionSeconds: Int?
 
     static let empty = TunnelDiagnosticsSnapshot(
         coreRunning: false,
@@ -30,8 +31,18 @@ struct TunnelDiagnosticsSnapshot: Equatable {
         geoNeedsGeosite: false,
         geoHasGeoip: false,
         geoHasGeosite: false,
-        geoStripped: false
+        geoStripped: false,
+        sessionSeconds: nil
     )
+}
+
+struct TunnelTrafficSnapshot: Equatable {
+    var available: Bool
+    var up: Int64
+    var down: Int64
+    var reason: String?
+
+    static let unavailable = TunnelTrafficSnapshot(available: false, up: 0, down: 0, reason: nil)
 }
 
 final class TunnelManager: ObservableObject {
@@ -42,7 +53,10 @@ final class TunnelManager: ObservableObject {
     @Published private(set) var coreRunning: Bool = false
     @Published private(set) var lastError: String?
     @Published private(set) var tunnelDiagnostics: TunnelDiagnosticsSnapshot = .empty
+    @Published private(set) var tunnelLogs: [String] = []
+    @Published private(set) var tunnelTraffic: TunnelTrafficSnapshot = .unavailable
     @Published private(set) var pendingReconnect: Bool = false
+    @Published private(set) var connectedAt: Date?
     private var manager: NETunnelProviderManager?
     private var statusObserver: AnyCancellable?
 
@@ -67,6 +81,7 @@ final class TunnelManager: ObservableObject {
             self.isReady = true
             if m.connection.status == .connected {
                 self.didConnect = true
+                if self.connectedAt == nil { self.connectedAt = Date() }
                 refreshCoreStatus(retries: 3)
             }
         } catch {
@@ -185,7 +200,8 @@ final class TunnelManager: ObservableObject {
                 geoNeedsGeosite: json["geoNeedsGeosite"] as? Bool ?? false,
                 geoHasGeoip: json["geoHasGeoip"] as? Bool ?? false,
                 geoHasGeosite: json["geoHasGeosite"] as? Bool ?? false,
-                geoStripped: json["geoStripped"] as? Bool ?? false
+                geoStripped: json["geoStripped"] as? Bool ?? false,
+                sessionSeconds: json["sessionSeconds"] as? Int
             )
             if self.status == .connected, !running {
                 if self.tunnelDiagnostics.geoStripped, self.lastError == nil {
@@ -263,9 +279,15 @@ final class TunnelManager: ObservableObject {
                 self.trackConnectFailures(previous: previous, current: connection.status)
                 if connection.status == .connected {
                     self.didConnect = true
+                    if self.connectedAt == nil { self.connectedAt = Date() }
                     self.refreshCoreStatus(retries: 5)
+                    self.refreshTraffic()
                 } else {
                     self.coreRunning = false
+                    if connection.status == .disconnected || connection.status == .invalid {
+                        self.connectedAt = nil
+                        self.tunnelTraffic = .unavailable
+                    }
                     // Do not wipe tunnelDiagnostics / lastError on disconnect — user needs them.
                     if (connection.status == .disconnected || connection.status == .invalid)
                         && self.pendingReconnect {
@@ -319,6 +341,41 @@ final class TunnelManager: ObservableObject {
             }
         } catch {
             lastError = Self.userFacingError(error)
+        }
+    }
+
+    func refreshLogs() {
+        queryTunnelMessage(type: "logs", retries: 2) { [weak self] json in
+            guard let self else { return }
+            if let lines = json["lines"] as? [String] {
+                self.tunnelLogs = lines
+            }
+        }
+    }
+
+    func clearLogs() {
+        queryTunnelMessage(type: "clear-logs", retries: 1) { [weak self] _ in
+            self?.tunnelLogs = []
+            self?.refreshLogs()
+        }
+    }
+
+    func refreshTraffic() {
+        queryTunnelMessage(type: "traffic", retries: 1) { [weak self] json in
+            guard let self else { return }
+            let available = json["available"] as? Bool ?? false
+            let up = (json["up"] as? NSNumber)?.int64Value
+                ?? (json["up"] as? Int).map(Int64.init)
+                ?? 0
+            let down = (json["down"] as? NSNumber)?.int64Value
+                ?? (json["down"] as? Int).map(Int64.init)
+                ?? 0
+            self.tunnelTraffic = TunnelTrafficSnapshot(
+                available: available,
+                up: up,
+                down: down,
+                reason: json["reason"] as? String
+            )
         }
     }
 

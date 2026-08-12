@@ -5,8 +5,18 @@ All notable changes to **decoder sec.** are documented here.
 ## [Unreleased]
 
 ### Planned
-- In-app log console
-- Signed TestFlight builds
+- Signed TestFlight builds (needs Apple / ESign cert secrets)
+
+## [0.1.0-beta.23] — 2026-08-12
+
+### Fixed
+- **CI archive failure** — `XrayNormalizer.normalize(useZashboard:)` parameter was discarded (`_`), breaking DecoderSecTunnel compile (beta.21–22)
+
+### Added
+- **Log console** (Settings → Network): ring-buffer of Packet Tunnel lifecycle events via IPC
+- **Session metrics** on Home when connected: session timer + ↑/↓ traffic (Clash API when Dashboard enabled for mihomo/sing-box; Xray shows timer only — EverywhereCore has no traffic API)
+- Diagnostics: session duration + traffic section
+- **zh-Hans** catch-up for Settings / Diagnostics / HWID / servers strings
 
 ## [0.1.0-beta.22] — 2026-08-12
 

@@ -31,14 +31,14 @@ We do **not** raise the floor to iOS 26-only — that would lock out most sidelo
 - [x] Clear HWID / “App not supported” errors in UI
 
 ### 3 — Session & ops
-- [ ] In-app log console (tunnel / core)
-- [ ] Latency / traffic readout when EverywhereCore exposes it
+- [x] In-app log console (tunnel / core)
+- [x] Latency / traffic readout when EverywhereCore exposes it *(Clash traffic via IPC when Dashboard on; Xray shows session timer — Evcore has no traffic API)*
 - [x] Tunnel settings: hide APNs/cellular toggles below OS that support them
 
 ### 4 — Localization & release
 - [x] Finish `ru` / `en` for Settings literals
-- [ ] Optional `zh-Hans` catch-up
-- [ ] Signed TestFlight when Apple / ESign certs are ready
+- [x] Optional `zh-Hans` catch-up
+- [ ] Signed TestFlight when Apple / ESign certs are ready *(blocked on signing secrets)*
 
 ## Design north star
 

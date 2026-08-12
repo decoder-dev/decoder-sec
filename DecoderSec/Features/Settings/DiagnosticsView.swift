@@ -14,6 +14,18 @@ struct DiagnosticsView: View {
                 row(String(localized: "VPN status"), vpnStatusText)
                 row(String(localized: "Core running"), boolText(tunnel.coreRunning))
                 row(String(localized: "Last error"), displayedCoreError)
+                if let seconds = tunnel.tunnelDiagnostics.sessionSeconds {
+                    row(String(localized: "Session"), "\(seconds)s")
+                }
+            }
+
+            Section(String(localized: "Traffic")) {
+                if tunnel.tunnelTraffic.available {
+                    row(String(localized: "↓ Down"), ByteCountFormatter.string(fromByteCount: tunnel.tunnelTraffic.down, countStyle: .binary))
+                    row(String(localized: "↑ Up"), ByteCountFormatter.string(fromByteCount: tunnel.tunnelTraffic.up, countStyle: .binary))
+                } else {
+                    row(String(localized: "Traffic"), tunnel.tunnelTraffic.reason ?? String(localized: "unavailable"))
+                }
             }
 
             Section(String(localized: "Geo resources")) {
@@ -85,6 +97,7 @@ struct DiagnosticsView: View {
         .onAppear {
             if tunnel.status == .connected {
                 tunnel.refreshCoreStatus(retries: 3)
+                tunnel.refreshTraffic()
             }
         }
     }

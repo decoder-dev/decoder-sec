@@ -9,7 +9,7 @@ enum XrayNormalizer: JSONCoreNormalizer {
     private static let logFloor = "warning"
     private static let logOrder = ["debug", "info", "warning", "error", "none"]
 
-    static func normalize(_ content: String, useZashboard _: Bool) throws -> String {
+    static func normalize(_ content: String, useZashboard: Bool) throws -> String {
         try normalize(content, useZashboard: useZashboard, stripGeoRules: false)
     }
 
@@ -80,7 +80,7 @@ enum XrayNormalizer: JSONCoreNormalizer {
                 if trimmed == "localhost" || trimmed == "127.0.0.1" { return nil }
                 return s
             }
-            if var obj = entry as? [String: Any] {
+            if let obj = entry as? [String: Any] {
                 if let address = obj["address"] as? String {
                     let trimmed = address.trimmingCharacters(in: .whitespaces).lowercased()
                     if trimmed == "localhost" || trimmed == "127.0.0.1" { return nil }

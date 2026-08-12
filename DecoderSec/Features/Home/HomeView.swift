@@ -16,6 +16,7 @@ struct HomeView: View {
     @State private var pulse = false
     @State private var showSubscribe = false
     @State private var heroAppeared = false
+    @State private var metricsTick = 0
 
     var body: some View {
         NavigationView {
@@ -32,7 +33,14 @@ struct HomeView: View {
                             .offset(y: heroAppeared ? 0 : 12)
 
                         statusLine
-                            .padding(.bottom, 24)
+                            .padding(.bottom, 12)
+
+                        if tunnel.status == .connected {
+                            sessionMetrics
+                                .padding(.bottom, 24)
+                        } else {
+                            Spacer().frame(height: 12)
+                        }
 
                         if store.active == nil {
                             emptyConfigCTA
@@ -71,12 +79,93 @@ struct HomeView: View {
                 withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
                     pulse = true
                 }
+                if tunnel.status == .connected {
+                    tunnel.refreshCoreStatus(retries: 2)
+                    tunnel.refreshTraffic()
+                }
+            }
+            .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+                guard tunnel.status == .connected else { return }
+                metricsTick &+= 1
+                if metricsTick % 3 == 0 {
+                    tunnel.refreshTraffic()
+                    tunnel.refreshCoreStatus(retries: 1)
+                }
+            }
+            .onChange(of: tunnel.status) { newStatus in
+                if newStatus == .connected {
+                    tunnel.refreshTraffic()
+                }
             }
         }
         .navigationViewStyle(.stack)
     }
 
     // MARK: - Sections
+
+    private var sessionMetrics: some View {
+        HStack(spacing: 16) {
+            metricCell(
+                title: String(localized: "Session"),
+                value: sessionDurationText
+            )
+            metricCell(
+                title: String(localized: "↓ Down"),
+                value: trafficText(tunnel.tunnelTraffic.down, available: tunnel.tunnelTraffic.available)
+            )
+            metricCell(
+                title: String(localized: "↑ Up"),
+                value: trafficText(tunnel.tunnelTraffic.up, available: tunnel.tunnelTraffic.available)
+            )
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Brand.Color.surface.opacity(0.9))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Brand.Color.hairline, lineWidth: 1)
+        )
+        .onAppear { tunnel.refreshTraffic() }
+    }
+
+    private func metricCell(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(Brand.Font.mono(10))
+                .foregroundStyle(Brand.Color.secondaryText)
+            Text(value)
+                .font(Brand.Font.mono(12, weight: .semibold))
+                .foregroundStyle(Brand.Color.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var sessionDurationText: String {
+        let seconds: Int
+        if let connectedAt = tunnel.connectedAt {
+            seconds = max(0, Int(Date().timeIntervalSince(connectedAt)))
+        } else if let s = tunnel.tunnelDiagnostics.sessionSeconds {
+            seconds = s
+        } else {
+            return "—"
+        }
+        _ = metricsTick // refresh label each tick
+        let h = seconds / 3600
+        let m = (seconds % 3600) / 60
+        let s = seconds % 60
+        if h > 0 { return String(format: "%d:%02d:%02d", h, m, s) }
+        return String(format: "%02d:%02d", m, s)
+    }
+
+    private func trafficText(_ bytes: Int64, available: Bool) -> String {
+        guard available else { return "—" }
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .binary)
+    }
 
     private var ambientBackground: some View {
         ZStack {

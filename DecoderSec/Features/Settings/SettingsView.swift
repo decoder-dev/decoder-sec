@@ -85,6 +85,11 @@ struct SettingsView: View {
                     } label: {
                         Label(String(localized: "Diagnostics"), systemImage: "stethoscope")
                     }
+                    NavigationLink {
+                        LogConsoleView()
+                    } label: {
+                        Label(String(localized: "Log console"), systemImage: "text.alignleft")
+                    }
                 }
 
                 Section(String(localized: "IO")) {
