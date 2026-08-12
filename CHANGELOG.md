@@ -17,6 +17,12 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.17] — 2026-08-12
+
+### Added
+- Встроенный экран **Diagnostics** (Settings → Network): статус туннеля, active Xray, outbound tags, proxy tag, DNS, routing rules
+- Кнопки быстрого восстановления: re-apply Happ routing и reconnect VPN
+
 ## [0.1.0-beta.16] — 2026-08-12
 
 ### Fixed

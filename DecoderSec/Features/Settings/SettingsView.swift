@@ -56,6 +56,11 @@ struct SettingsView: View {
                     } label: {
                         Label(String(localized: "Happ routing"), systemImage: "arrow.triangle.branch")
                     }
+                    NavigationLink {
+                        DiagnosticsView()
+                    } label: {
+                        Label(String(localized: "Diagnostics"), systemImage: "stethoscope")
+                    }
                 }
 
                 Section(String(localized: "IO")) {
