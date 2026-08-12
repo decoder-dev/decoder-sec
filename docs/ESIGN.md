@@ -1,31 +1,28 @@
 # ESign — один файл
 
-Скачай **`DecoderSec.ipa`** из [Releases](https://github.com/decoder-dev/decoder-sec/releases) (полный VPN, не lite).
+Скачай **`DecoderSec.ipa`** (~38 МБ) из [Releases](https://github.com/decoder-dev/decoder-sec/releases).
 
-## Шаги
+## Установка (если «не устанавливается»)
 
-1. Открой **ESign** на iPhone.
-2. Импорт → выбери `DecoderSec.ipa`.
-3. Подпись **платным** сертификатом с правом **Network Extension / VPN / packet-tunnel**  
-   для **приложения и** `DecoderSecTunnel.appex`  
-   (бесплатный Apple ID VPN не даст — это ограничение Apple, не приложения).
-4. Удали старую установку decoder sec. (чтобы сбросить битый VPN-профиль).
-5. Установи → при Connect разреши VPN-профиль.
-6. Добавь конфиг (или `happ://`) → **Connect**.
+1. **Проверь файл:** размер около **38 МБ**. Если скачался килобайтный HTML — это не IPA, скачай снова по Wi‑Fi.
+2. На iPhone: **Настройки → Основные → VPN и управление устройством** — удали старые профили decoder / VPN.
+3. **Настройки → VPN** — удали конфигурацию decoder sec., если осталась после удаления приложения.
+4. Удали приложение decoder sec. с домашнего экрана.
+5. ESign → Импорт `DecoderSec.ipa` → подпись **платным** сертификатом с **Network Extension** (app + `.appex`) → Установить.
+6. Доверь сертификат при запросе → открой приложение → Connect → разреши VPN.
 
-Один IPA уже содержит приложение и Packet Tunnel. App Groups не нужны.  
-После смены Bundle ID в ESign extension находится из `PlugIns/*.appex` автоматически.
+Бесплатный Apple ID **не** ставит VPN-приложения с Packet Tunnel — это ограничение Apple.
 
-## Если Connect → «Packet Tunnel did not start» / пустые логи extension
+## Обычные шаги
 
-Это **не** ошибка Xray. Система не смогла запустить `.appex`:
+1. Открой **ESign**.
+2. Импорт → `DecoderSec.ipa` (полный, не lite).
+3. Подпись платным сертом с `packet-tunnel-provider`.
+4. Установка → конфиг / `happ://` → **Connect**.
 
-| Причина | Что сделать |
-|---|---|
-| Серт без Network Extension | Платный сертификат / профиль с `packet-tunnel-provider` |
-| Подписан только app, не appex | В ESign включить подпись extension |
-| Поставили lite IPA | Ставить полный `DecoderSec.ipa` |
-| Старый VPN-профиль | Удалить приложение → поставить заново |
+CI IPA подписан ad-hoc **без** entitlements — ESign сам вшивает их из вашего профиля (так надёжнее при смене Bundle ID).
 
-В Log console ищите строку `appex preflight … plugins=[…] matched=true`.  
-Если `plugins=[]` — в IPA нет Packet Tunnel. Если `matched=false` — неверный bundle id после resign.
+## Если Connect не поднимает туннель
+
+См. Log console: строка `appex preflight … plugins=[…] matched=true`.  
+`plugins=[]` → lite/битый IPA. Иначе — серт без Network Extension.

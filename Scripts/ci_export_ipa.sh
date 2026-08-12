@@ -157,9 +157,13 @@ adhoc_sign_bundle() {
     exit 1
   fi
 
-  echo "→ ad-hoc codesign (required for Sideloadly / device install)"
+  echo "→ ad-hoc codesign WITHOUT entitlements (ESign/Sideloadly inject from the provisioning profile)"
 
   # Nested Mach-O first: dylibs, then frameworks, then appex, then app.
+  # Do NOT bake packet-tunnel entitlements into the CI IPA: ESign remaps
+  # bundle IDs and injects entitlements from the user's mobileprovision.
+  # Pre-baked com.apple.developer.networking.networkextension on an ad-hoc
+  # signature is a common "Unable to Install" / resign failure on device.
   while IFS= read -r -d '' bin; do
     codesign --force --sign - --timestamp=none "$bin" 2>/dev/null || true
   done < <(find "$app" -type f \( -name '*.dylib' -o -name '*.so' \) -print0 2>/dev/null || true)
@@ -169,29 +173,20 @@ adhoc_sign_bundle() {
   done < <(find "$app/Frameworks" -maxdepth 1 -type d -name '*.framework' -print0 2>/dev/null || true)
 
   while IFS= read -r -d '' appex; do
-    if [[ -f "$TUNNEL_ENTITLEMENTS" ]]; then
-      codesign --force --sign - --timestamp=none --entitlements "$TUNNEL_ENTITLEMENTS" "$appex"
-    else
-      codesign --force --sign - --timestamp=none "$appex"
-    fi
+    codesign --force --sign - --timestamp=none "$appex"
   done < <(find "$app/PlugIns" -maxdepth 1 -type d -name '*.appex' -print0 2>/dev/null || true)
 
-  if [[ -f "$APP_ENTITLEMENTS" ]]; then
-    codesign --force --sign - --timestamp=none --entitlements "$APP_ENTITLEMENTS" "$app"
-  else
-    codesign --force --sign - --timestamp=none "$app"
-  fi
+  codesign --force --sign - --timestamp=none "$app"
 
   if [[ ! -d "$app/_CodeSignature" ]]; then
     echo "error: ad-hoc codesign did not produce _CodeSignature" >&2
     exit 1
   fi
-  # --no-strict: ad-hoc + NE entitlements without a profile still verify structurally.
   if ! codesign --verify --no-strict "$app" >/dev/null 2>&1; then
-    echo "warning: codesign --verify reported issues (continuing; Sideloadly will re-sign)" >&2
+    echo "warning: codesign --verify reported issues (continuing; ESign will re-sign)" >&2
     codesign -dv "$app" 2>&1 | tail -8 || true
   fi
-  echo "✓ ad-hoc signature present"
+  echo "✓ ad-hoc signature present (no baked entitlements)"
 }
 
 validate_installable_app() {

@@ -4,6 +4,11 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.42] — 2026-08-12
+
+### Fixed
+- **ESign «не устанавливается»**: CI IPA больше не вшивает `packet-tunnel` entitlements в ad-hoc подпись — ESign/Sideloadly подставляют их из provisioning profile при resign (частая причина Unable to Install после удаления приложения).
+
 ## [0.1.0-beta.41] — 2026-08-12
 
 ### Fixed
