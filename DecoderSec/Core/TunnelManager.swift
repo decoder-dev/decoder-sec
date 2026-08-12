@@ -343,7 +343,7 @@ final class TunnelManager: ObservableObject {
 
         func resolve(from attempt: Int) {
             guard lastError == nil else { return }
-            guard let coreError = tunnelDiagnostics.coreError, !coreError.isEmpty {
+            if let coreError = tunnelDiagnostics.coreError, !coreError.isEmpty {
                 lastError = coreError
                 updateLifecyclePhase()
                 return
