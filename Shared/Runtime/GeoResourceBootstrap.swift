@@ -74,29 +74,79 @@ enum GeoResourceBootstrap {
         if let firstError { throw firstError }
     }
 
-    static func tryEnsurePresent(forConfig configJSON: String, in directory: URL) {
-        try? ensurePresentBlocking(forConfig: configJSON, in: directory)
+    static func tryEnsurePresent(forConfig configJSON: String, in directory: URL, onComplete: ((Bool) -> Void)? = nil) {
+        DispatchQueue.global(qos: .utility).async {
+            let ok = (try? ensurePresentBlocking(forConfig: configJSON, in: directory)) != nil
+            onComplete?(ok)
+        }
     }
 
     static func referencesGeoip(_ configJSON: String) -> Bool {
-        routingRuleStrings(in: configJSON, key: "ip").contains { $0.lowercased().hasPrefix("geoip:") }
+        if routingRuleValues(in: configJSON, keys: ["ip"]).contains(where: isGeoipToken) {
+            return true
+        }
+        if dnsDomainValues(in: configJSON).contains(where: isGeoipToken) {
+            return true
+        }
+        return configJSON.lowercased().contains("geoip:")
     }
 
     static func referencesGeosite(_ configJSON: String) -> Bool {
-        routingRuleStrings(in: configJSON, key: "domain").contains { $0.lowercased().hasPrefix("geosite:") }
+        if routingRuleValues(in: configJSON, keys: ["domain"]).contains(where: isGeositeToken) {
+            return true
+        }
+        if dnsDomainValues(in: configJSON).contains(where: isGeositeToken) {
+            return true
+        }
+        return configJSON.lowercased().contains("geosite:")
     }
 
-    private static func routingRuleStrings(in configJSON: String, key: String) -> [String] {
-        guard let data = configJSON.data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+    // MARK: - Parsing
+
+    private static func isGeoipToken(_ value: String) -> Bool {
+        value.lowercased().hasPrefix("geoip:")
+    }
+
+    private static func isGeositeToken(_ value: String) -> Bool {
+        value.lowercased().hasPrefix("geosite:")
+    }
+
+    private static func routingRuleValues(in configJSON: String, keys: [String]) -> [String] {
+        guard let root = parseRoot(configJSON),
               let routing = root["routing"] as? [String: Any],
               let rules = routing["rules"] as? [[String: Any]] else {
             return []
         }
-        return rules.flatMap { rule -> [String] in
-            guard let values = rule[key] as? [Any] else { return [] }
-            return values.compactMap { $0 as? String }
+        return rules.flatMap { rule in
+            keys.flatMap { stringValues(from: rule[$0]) }
         }
+    }
+
+    private static func dnsDomainValues(in configJSON: String) -> [String] {
+        guard let root = parseRoot(configJSON),
+              let dns = root["dns"] as? [String: Any],
+              let servers = dns["servers"] as? [Any] else {
+            return []
+        }
+        return servers.flatMap { entry -> [String] in
+            guard let obj = entry as? [String: Any] else { return [] }
+            return stringValues(from: obj["domains"])
+        }
+    }
+
+    private static func stringValues(from value: Any?) -> [String] {
+        guard let value else { return [] }
+        if let single = value as? String { return [single] }
+        if let list = value as? [Any] { return list.compactMap { $0 as? String } }
+        return []
+    }
+
+    private static func parseRoot(_ configJSON: String) -> [String: Any]? {
+        guard let data = configJSON.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return root
     }
 
     private static func downloadAsync(from url: URL, to destination: URL, completion: @escaping (Error?) -> Void) {

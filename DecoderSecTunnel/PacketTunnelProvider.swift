@@ -142,7 +142,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 TunnelLogBuffer.shared.append("missing geo (\(missing)) — stripping geosite/geoip rules")
                 // Never block startTunnel on geo download — iOS kills the extension (~30s budget).
                 DispatchQueue.global(qos: .utility).async {
-                    GeoResourceBootstrap.tryEnsurePresent(forConfig: raw, in: dir)
+                    GeoResourceBootstrap.tryEnsurePresent(forConfig: raw, in: dir) { ok in
+                        if ok {
+                            TunnelLogBuffer.shared.append("geo download complete — reconnect for full routing")
+                        } else {
+                            TunnelLogBuffer.shared.append("geo download failed — traffic uses stripped rules")
+                        }
+                    }
                 }
             } else if status.needsGeoip || status.needsGeosite {
                 TunnelLogBuffer.shared.append("geo resources ready")

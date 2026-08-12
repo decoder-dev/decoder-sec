@@ -62,6 +62,8 @@ final class TunnelManager: ObservableObject {
     private var statusObserver: AnyCancellable?
 
     private var didConnect: Bool = false
+    private var didAutoReconnectForGeo = false
+    private var coreStartupWatchdogTask: Task<Void, Never>?
 
     private var transitionTimeoutTask: Task<Void, Never>?
     private static let transitionTimeoutNanos: UInt64 = 35 * 1_000_000_000
@@ -201,7 +203,54 @@ final class TunnelManager: ObservableObject {
                 geoStripped: json["geoStripped"] as? Bool ?? false,
                 sessionSeconds: json["sessionSeconds"] as? Int
             )
+            self.reconcileCoreErrorFromLogs(fallback: error, running: running)
+            self.maybeAutoReconnectAfterGeoDownload()
             self.updateLifecyclePhase()
+        }
+    }
+
+    /// When IPC only returns the generic placeholder, prefer the last EvcoreStartCore line from NE logs.
+    private func reconcileCoreErrorFromLogs(fallback: String?, running: Bool) {
+        guard !running else { return }
+        let generic = fallback == "Core is not running." || (fallback?.isEmpty != false)
+        guard generic else { return }
+        refreshLogs()
+        var diag = tunnelDiagnostics
+        if let line = tunnelLogs.last(where: { $0.contains("EvcoreStartCore failed:") }) {
+            let detail = line.replacingOccurrences(of: "EvcoreStartCore failed: ", with: "")
+            lastError = detail
+            diag.coreError = detail
+        } else if let line = tunnelLogs.last(where: { logLineLooksLikeFailure($0) }) {
+            lastError = line
+            diag.coreError = line
+        }
+        tunnelDiagnostics = diag
+    }
+
+    /// After geo was stripped on first connect, reconnect once when extension finishes downloading .dat files.
+    private func maybeAutoReconnectAfterGeoDownload() {
+        guard status == .connected,
+              tunnelDiagnostics.geoStripped,
+              !didAutoReconnectForGeo else { return }
+        let geo = tunnelDiagnostics
+        let ready = (!geo.geoNeedsGeoip || geo.geoHasGeoip) && (!geo.geoNeedsGeosite || geo.geoHasGeosite)
+        guard ready else { return }
+        didAutoReconnectForGeo = true
+        Task { await reconnect() }
+    }
+
+    private func scheduleCoreStartupWatchdog() {
+        coreStartupWatchdogTask?.cancel()
+        coreStartupWatchdogTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled, let self else { return }
+            await MainActor.run {
+                guard self.status == .connected, !self.coreRunning else { return }
+                self.refreshCoreStatus(retries: 5)
+                self.refreshLogs()
+                self.reconcileCoreErrorFromLogs(fallback: self.tunnelDiagnostics.coreError, running: false)
+                self.updateLifecyclePhase()
+            }
         }
     }
 
@@ -301,11 +350,15 @@ final class TunnelManager: ObservableObject {
                     if self.connectedAt == nil { self.connectedAt = Date() }
                     self.refreshCoreStatus(retries: 5)
                     self.refreshTraffic()
+                    self.scheduleCoreStartupWatchdog()
                 } else {
+                    self.coreStartupWatchdogTask?.cancel()
+                    self.coreStartupWatchdogTask = nil
                     self.coreRunning = false
                     if connection.status == .disconnected || connection.status == .invalid {
                         self.connectedAt = nil
                         self.tunnelTraffic = .unavailable
+                        self.didAutoReconnectForGeo = false
                     }
                     // Do not wipe tunnelDiagnostics / lastError on disconnect — user needs them.
                     if (connection.status == .disconnected || connection.status == .invalid)

@@ -31,11 +31,11 @@ struct DiagnosticsView: View {
 
             Section(String(localized: "Geo resources")) {
                 row(String(localized: "Needs geoip.dat"), geoRow(
-                    tunnel.tunnelDiagnostics.geoNeedsGeoip || (snapshot?.usesGeoRules == true),
+                    tunnel.tunnelDiagnostics.geoNeedsGeoip,
                     tunnel.tunnelDiagnostics.geoHasGeoip
                 ))
                 row(String(localized: "Needs geosite.dat"), geoRow(
-                    tunnel.tunnelDiagnostics.geoNeedsGeosite || (snapshot?.usesGeoRules == true),
+                    tunnel.tunnelDiagnostics.geoNeedsGeosite,
                     tunnel.tunnelDiagnostics.geoHasGeosite
                 ))
                 row(String(localized: "Geo rules stripped"), boolText(tunnel.tunnelDiagnostics.geoStripped))
@@ -216,7 +216,7 @@ private struct XraySnapshot {
             hasCatchAll: hasCatchAll,
             hasBalancer: hasBalancer,
             dnsServers: dns,
-            usesGeoRules: json.contains("geosite:") || json.contains("geoip:")
+            usesGeoRules: GeoResourceBootstrap.referencesGeosite(json) || GeoResourceBootstrap.referencesGeoip(json)
         )
     }
 

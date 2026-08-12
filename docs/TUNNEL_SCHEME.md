@@ -133,7 +133,7 @@ sequenceDiagram
 - При `stripGeoRules`: фильтр `geosite:` / `geoip:` в rules.
 - Catch-all rule на proxy, `domainStrategy: IPIfNonMatch`.
 
-Детекция geo-зависимости: **parse routing.rules**, не substring по всему JSON (`GeoResourceBootstrap`).
+Детекция geo-зависимости: parse `routing.rules` (string **или** array) + DNS `domains` + substring fallback.
 
 ## 6. IPC (app ↔ extension)
 

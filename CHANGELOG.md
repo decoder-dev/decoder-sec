@@ -4,6 +4,14 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.27] — 2026-08-12
+
+### Fixed
+- **Ядро не стартует при geosite/geoip** — регрессия beta.26: geo-детекция снова находит правила (string/array в rules, DNS domains, substring fallback); strip срабатывает без .dat
+- Diagnostics: geo-строки только из extension IPC (без ложного «нужен geo» из app-конфига)
+- Реальная ошибка EvcoreStartCore подтягивается из Log console, если IPC отдаёт generic «Core is not running»
+- Auto-reconnect после фоновой загрузки geo, когда правила были stripped
+
 ## [0.1.0-beta.26] — 2026-08-12
 
 ### Added
