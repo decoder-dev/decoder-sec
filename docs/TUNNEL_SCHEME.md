@@ -158,6 +158,13 @@ Polling: `TunnelManager.refreshCoreStatus` / `captureStartupFailureReason` с ba
 
 ## 8. Приоритеты доработок
 
+### P0 (beta.38) — Xray docs gaps
+
+- [x] Always inject default `dns.servers` when missing (anti DNS-leak in Packet Tunnel).
+- [x] Preserve `sockopt.dialerProxy` / `proxySettings.tag` outbound chains in minimal boot.
+- [x] Geo-strip also cleans `expectedIPs`/`unexpectedIPs`/`sourceIP`/`localIP`.
+- [x] Keep `random`/`roundRobin` balancers; flatten only `leastPing`/`leastLoad`.
+
 ### P0 (beta.37)
 
 - [x] Tier-3 **minimal boot**: if ios-safe + geo-strip fail/hang, extract ≤3 proxy outbounds into a

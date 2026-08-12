@@ -3,10 +3,10 @@
 //  DecoderSec
 //
 //  iOS-safe normalize for Happ / v2rayN subscription JSON.
-//  Android (v2rayNG): balancers always ship with observatory/burstObservatory,
-//  or use random/roundRobin without probes. Happ desktop configs often have
-//  balancers + observatory + DNS localhost — the last two break EvcoreStartCore
-//  on iOS Packet Tunnel (no local DNS inbound; observatory probes hang TUN).
+//  Aligns with Xray docs (DNS, routing, sockopt.dialerProxy) and mobile clients
+//  (v2rayNG / INCY): always ship a DNS block, strip geo tokens from all IP/DNS
+//  fields, keep random/roundRobin balancers, flatten leastPing/leastLoad only,
+//  and preserve dialerProxy chains in minimal boot.
 //
 
 import Foundation
@@ -33,8 +33,8 @@ enum XrayNormalizer: JSONCoreNormalizer {
         }
         var root = try parseJSONObject(prepared)
 
-        // Balancers without live observatory hang or fail on iOS TUN.
-        // v2rayNG keeps observatory WITH balancers; we flatten to a fixed outbound.
+        // leastPing/leastLoad need observatory probes; those hang on iOS TUN.
+        // random/roundRobin work without observatory (Xray treats all as alive).
         root.removeValue(forKey: "burstObservatory")
         root.removeValue(forKey: "observatory")
 
@@ -49,11 +49,16 @@ enum XrayNormalizer: JSONCoreNormalizer {
             settings["name"] = "utun"
             settings["MTU"] = tunnelMTU
             patched["settings"] = settings
-            patched["sniffing"] = [
-                "enabled": true,
-                "destOverride": ["http", "tls", "quic"],
-                "routeOnly": false,
-            ]
+            // Preserve provider sniffing excludes when present; ensure enabled.
+            var sniffing = (patched["sniffing"] as? [String: Any]) ?? [:]
+            sniffing["enabled"] = true
+            if sniffing["destOverride"] == nil {
+                sniffing["destOverride"] = ["http", "tls", "quic"]
+            }
+            if sniffing["routeOnly"] == nil {
+                sniffing["routeOnly"] = false
+            }
+            patched["sniffing"] = sniffing
             inbounds[first] = patched
             removeOtherTunInbounds(&inbounds, keep: first, typeKey: "protocol")
         } else {
@@ -81,10 +86,8 @@ enum XrayNormalizer: JSONCoreNormalizer {
         return try serializeJSON(root)
     }
 
-    /// Absolute boot guarantee for Packet Tunnel: one proxy outbound + tun +
-    /// public DNS + catch-all. No geo, balancers, observatory, or localhost DNS.
-    /// Returns up to `limit` configs (preferred tags first) so the caller can
-    /// try the next node if Xray rejects a broken outbound definition.
+    /// Absolute boot guarantee for Packet Tunnel: proxy outbound (+ dialerProxy
+    /// chain) + tun + public DNS + catch-all. No geo, observatory, or localhost DNS.
     static func minimalBootConfigs(from content: String, limit: Int = 3) throws -> [(tag: String, json: String)] {
         let root = try parseJSONObject(content)
         let outbounds = (root["outbounds"] as? [[String: Any]]) ?? []
@@ -95,20 +98,32 @@ enum XrayNormalizer: JSONCoreNormalizer {
 
         var results: [(tag: String, json: String)] = []
         for outbound in candidates.prefix(max(1, limit)) {
-            var proxy = outbound
-            proxy.removeValue(forKey: "burstObservatory")
-            proxy.removeValue(forKey: "observatory")
+            var proxy = scrubOutboundObservatory(outbound)
             let tag = {
                 let t = (proxy["tag"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 return t.isEmpty ? "proxy" : t
             }()
             proxy["tag"] = tag
 
+            // Keep WARP-before-VLESS / dialerProxy chains (Xray sockopt docs).
+            var chain = resolveDialerChain(for: proxy, in: outbounds)
+            if chain.isEmpty { chain = [proxy] }
+            chain[0] = proxy
+            chain = chain.map(scrubOutboundObservatory)
+
+            var outboundList: [[String: Any]] = chain
+            if !outboundList.contains(where: { ($0["tag"] as? String) == "direct" }) {
+                outboundList.append(["tag": "direct", "protocol": "freedom"])
+            }
+            if !outboundList.contains(where: { ($0["tag"] as? String) == "block" }) {
+                outboundList.append(["tag": "block", "protocol": "blackhole"])
+            }
+
             let config: [String: Any] = [
                 "log": ["loglevel": "warning"],
                 "dns": [
-                    "servers": ["1.1.1.1", "8.8.8.8"],
-                    "queryStrategy": "UseIPv4",
+                    "servers": ContainerPaths.defaultDNSServers,
+                    "queryStrategy": "UseIP",
                 ],
                 "inbounds": [[
                     "tag": decoderTunTag,
@@ -120,11 +135,7 @@ enum XrayNormalizer: JSONCoreNormalizer {
                         "routeOnly": false,
                     ],
                 ]],
-                "outbounds": [
-                    proxy,
-                    ["tag": "direct", "protocol": "freedom"],
-                    ["tag": "block", "protocol": "blackhole"],
-                ],
+                "outbounds": outboundList,
                 "routing": [
                     "domainStrategy": "AsIs",
                     "rules": [[
@@ -150,7 +161,6 @@ enum XrayNormalizer: JSONCoreNormalizer {
         if (flags & UInt32(DS_SCAN_OBSERVATORY)) != 0 { hazards.append("observatory") }
         if (flags & UInt32(DS_SCAN_LOCALHOST)) != 0 { hazards.append("dns-localhost") }
 
-        // JSON refine for balancerTag-only / unparseable edge cases.
         guard let root = try? parseJSONObject(content) else {
             if hazards.isEmpty { return ["unparseable"] }
             return hazards
@@ -170,6 +180,9 @@ enum XrayNormalizer: JSONCoreNormalizer {
         }
         if dnsHasLocalhost(root["dns"]), !hazards.contains("dns-localhost") {
             hazards.append("dns-localhost")
+        }
+        if root["dns"] == nil, !hazards.contains("dns-missing") {
+            hazards.append("dns-missing")
         }
         return hazards
     }
@@ -191,12 +204,7 @@ enum XrayNormalizer: JSONCoreNormalizer {
     }
 
     private static func sanitizeOutbounds(_ outbounds: [[String: Any]]) -> [[String: Any]] {
-        var sanitized = outbounds.map { outbound in
-            var copy = outbound
-            copy.removeValue(forKey: "burstObservatory")
-            copy.removeValue(forKey: "observatory")
-            return copy
-        }
+        var sanitized = outbounds.map(scrubOutboundObservatory)
         if sanitized.isEmpty || !sanitized.contains(where: { ($0["tag"] as? String) == "direct" }) {
             sanitized.append([
                 "tag": "direct",
@@ -206,9 +214,22 @@ enum XrayNormalizer: JSONCoreNormalizer {
         return sanitized
     }
 
+    /// Xray DNS docs + INCY: missing `dns.servers` ⇒ OS resolver from inside
+    /// Packet Tunnel — DNS leak (NE never loops its own traffic into TUN).
     private static func sanitizeDNS(_ dns: Any?, stripGeoRules: Bool) -> Any? {
-        guard var dnsObj = dns as? [String: Any] else { return dns }
-        guard var servers = dnsObj["servers"] as? [Any] else { return dns }
+        guard var dnsObj = dns as? [String: Any] else {
+            return [
+                "servers": ContainerPaths.defaultDNSServers,
+                "queryStrategy": "UseIP",
+            ]
+        }
+        guard var servers = dnsObj["servers"] as? [Any], !servers.isEmpty else {
+            dnsObj["servers"] = ContainerPaths.defaultDNSServers
+            if dnsObj["queryStrategy"] == nil {
+                dnsObj["queryStrategy"] = "UseIP"
+            }
+            return dnsObj
+        }
 
         servers = servers.compactMap { entry -> Any? in
             if let s = entry as? String {
@@ -222,20 +243,18 @@ enum XrayNormalizer: JSONCoreNormalizer {
                     if isLocalhostResolver(trimmed) { return nil }
                 }
                 if stripGeoRules {
+                    // DNS docs: domains + expectedIPs/unexpectedIPs use geo tokens.
                     obj = stripGeoTokens(from: obj, key: "domains", prefix: "geosite:")
                     obj = stripGeoTokens(from: obj, key: "domains", prefix: "geoip:")
+                    obj = stripGeoTokens(from: obj, key: "expectedIPs", prefix: "geoip:")
+                    obj = stripGeoTokens(from: obj, key: "unexpectedIPs", prefix: "geoip:")
                 }
                 return obj
             }
             return entry
         }
 
-        // "localhost" in a Happ/desktop DNS list is usually the domain-agnostic
-        // fallback resolver (matched last, after every domain-scoped entry).
-        // Stripping it can leave e.g. a single `domains: ["geosite:cn"]` server
-        // with nothing to answer any other query — Xray then has no DNS path
-        // at all for the rest of the traffic. Only skip re-adding a default
-        // when a server with no `domains` restriction already covers it.
+        // After stripping localhost, ensure a catch-all resolver remains.
         let hasCatchAllServer = servers.contains { entry in
             if entry is String { return true }
             if let obj = entry as? [String: Any] {
@@ -249,6 +268,9 @@ enum XrayNormalizer: JSONCoreNormalizer {
         }
 
         dnsObj["servers"] = servers
+        if dnsObj["queryStrategy"] == nil {
+            dnsObj["queryStrategy"] = "UseIP"
+        }
         return dnsObj
     }
 
@@ -270,40 +292,55 @@ enum XrayNormalizer: JSONCoreNormalizer {
         let balancers = (routing["balancers"] as? [[String: Any]]) ?? []
         let outboundTags = Set(outbounds.compactMap { $0["tag"] as? String })
         let fallbackOutbound = resolveProxyTag(from: outbounds) ?? "direct"
-        // v2rayNG's getBalance() picks a balancer's live outbound at runtime
-        // from its `selector` tag-prefix list (health-checked by observatory).
-        // We have no reliable observatory on iOS, so resolve once here — but
-        // still respect `selector` per balancer, otherwise a Happ config with
-        // a dedicated "whitelist" balancer next to the main "proxy" balancer
-        // would collapse both onto the same outbound and silently drop the
-        // whitelist-lv2/lv3 routing intent.
-        let balancerOutbounds = resolveBalancerOutbounds(balancers, outbounds: outbounds, fallback: fallbackOutbound)
-        routing.removeValue(forKey: "balancers")
+
+        // Xray routing docs: only leastPing/leastLoad require observatory.
+        // random/roundRobin (default) work without probes — keep them.
+        let keepBalancers = balancers.filter { !balancerRequiresObservatory($0) }
+        let flattenBalancers = balancers.filter { balancerRequiresObservatory($0) }
+        let balancerOutbounds = resolveBalancerOutbounds(
+            flattenBalancers, outbounds: outbounds, fallback: fallbackOutbound
+        )
+        let keptBalancerTags = Set(keepBalancers.compactMap { $0["tag"] as? String })
+
+        if keepBalancers.isEmpty {
+            routing.removeValue(forKey: "balancers")
+        } else {
+            routing["balancers"] = keepBalancers
+        }
 
         rules = rules.compactMap { rule -> [String: Any]? in
             var copy = rule
             copy.removeValue(forKey: "inboundTag")
 
             if let balancerTag = copy["balancerTag"] as? String, !balancerTag.isEmpty {
-                copy.removeValue(forKey: "balancerTag")
-                copy["outboundTag"] = balancerOutbounds[balancerTag] ?? fallbackOutbound
+                if keptBalancerTags.contains(balancerTag) {
+                    // Keep balancerTag for random/roundRobin balancers.
+                    copy.removeValue(forKey: "outboundTag")
+                } else {
+                    copy.removeValue(forKey: "balancerTag")
+                    copy["outboundTag"] = balancerOutbounds[balancerTag] ?? fallbackOutbound
+                }
             }
-            if let outboundTag = copy["outboundTag"] as? String {
+            if let outboundTag = copy["outboundTag"] as? String, copy["balancerTag"] == nil {
                 if outboundTag.isEmpty || !outboundTags.contains(outboundTag) {
                     copy["outboundTag"] = fallbackOutbound
                 }
             }
-            if copy["outboundTag"] == nil {
+            if copy["outboundTag"] == nil, copy["balancerTag"] == nil {
                 copy["outboundTag"] = fallbackOutbound
             }
 
             if stripGeoRules {
+                // Routing docs: domain/ip + sourceIP/localIP accept geoip:/geosite:.
                 copy = stripGeoTokens(from: copy, key: "domain", prefix: "geosite:")
                 copy = stripGeoTokens(from: copy, key: "ip", prefix: "geoip:")
+                copy = stripGeoTokens(from: copy, key: "sourceIP", prefix: "geoip:")
+                copy = stripGeoTokens(from: copy, key: "localIP", prefix: "geoip:")
             }
 
-            // Drop empty shells after geo strip / balancer flatten.
-            guard ruleHasSelectors(copy) || copy["outboundTag"] != nil else { return nil }
+            guard ruleHasSelectors(copy) || copy["outboundTag"] != nil || copy["balancerTag"] != nil else {
+                return nil
+            }
             return copy
         }
 
@@ -322,15 +359,27 @@ enum XrayNormalizer: JSONCoreNormalizer {
         return routing
     }
 
+    /// Xray: leastPing / leastLoad must be used with an observatory.
+    private static func balancerRequiresObservatory(_ balancer: [String: Any]) -> Bool {
+        guard let strategy = balancer["strategy"] as? [String: Any],
+              let type = (strategy["type"] as? String)?.lowercased() else {
+            return false // default strategy is random
+        }
+        return type == "leastping" || type == "leastload"
+    }
+
     private static func ruleHasSelectors(_ rule: [String: Any]) -> Bool {
         let hasDomain = hasSelectorValue(rule["domain"])
         let hasIP = hasSelectorValue(rule["ip"])
+        let hasSourceIP = hasSelectorValue(rule["sourceIP"])
+        let hasLocalIP = hasSelectorValue(rule["localIP"])
         let hasPort = rule["port"] != nil
         let hasProtocol = rule["protocol"] != nil
         let hasNetwork = rule["network"] != nil
         let hasProcess = rule["process"] != nil
         let hasUser = rule["user"] != nil
-        return hasDomain || hasIP || hasPort || hasProtocol || hasNetwork || hasProcess || hasUser
+        return hasDomain || hasIP || hasSourceIP || hasLocalIP
+            || hasPort || hasProtocol || hasNetwork || hasProcess || hasUser
     }
 
     private static func hasSelectorValue(_ value: Any?) -> Bool {
@@ -353,7 +402,6 @@ enum XrayNormalizer: JSONCoreNormalizer {
         return copy
     }
 
-    /// Shared/C `ds_json_blank_geo_strings` — returns nil if C alloc fails.
     private static func blankGeoStringsInC(_ content: String) -> String? {
         content.withCString { ptr -> String? in
             let len = strlen(ptr)
@@ -384,10 +432,6 @@ enum XrayNormalizer: JSONCoreNormalizer {
         return ruleHasSelectors(copy)
     }
 
-    /// Maps each `balancers[].tag` to a single concrete outbound tag, honoring
-    /// `selector` (a list of tag prefixes, e.g. `["whitelist-"]`) when present
-    /// so multi-balancer configs keep routing distinct traffic to distinct
-    /// outbound pools instead of everything falling back to `proxy`.
     private static func resolveBalancerOutbounds(
         _ balancers: [[String: Any]],
         outbounds: [[String: Any]],
@@ -425,7 +469,6 @@ enum XrayNormalizer: JSONCoreNormalizer {
         return firstUsableOutboundTag(from: outbounds, skipWhitelist: false)
     }
 
-    /// Ordered proxy candidates for minimal boot (preferred tags first).
     private static func usableProxyOutbounds(from outbounds: [[String: Any]]) -> [[String: Any]] {
         var preferred: [[String: Any]] = []
         var normal: [[String: Any]] = []
@@ -457,6 +500,48 @@ enum XrayNormalizer: JSONCoreNormalizer {
             return tag
         }
         return nil
+    }
+
+    /// `streamSettings.sockopt.dialerProxy` or legacy `proxySettings.tag`.
+    private static func dialerProxyTag(of outbound: [String: Any]) -> String? {
+        if let stream = outbound["streamSettings"] as? [String: Any],
+           let sockopt = stream["sockopt"] as? [String: Any],
+           let tag = sockopt["dialerProxy"] as? String,
+           !tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return tag
+        }
+        if let proxySettings = outbound["proxySettings"] as? [String: Any],
+           let tag = proxySettings["tag"] as? String,
+           !tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return tag
+        }
+        return nil
+    }
+
+    /// Follow dialerProxy/proxySettings so minimal boot keeps WARP→VLESS chains.
+    private static func resolveDialerChain(
+        for candidate: [String: Any],
+        in allOutbounds: [[String: Any]]
+    ) -> [[String: Any]] {
+        var chain = [candidate]
+        var seen: Set<String> = []
+        if let tag = candidate["tag"] as? String { seen.insert(tag) }
+        var current = candidate
+        while let nextTag = dialerProxyTag(of: current), !seen.contains(nextTag),
+              let next = allOutbounds.first(where: { ($0["tag"] as? String) == nextTag }) {
+            chain.append(next)
+            seen.insert(nextTag)
+            current = next
+            if chain.count > 8 { break } // defensive cycle cap
+        }
+        return chain
+    }
+
+    private static func scrubOutboundObservatory(_ outbound: [String: Any]) -> [String: Any] {
+        var copy = outbound
+        copy.removeValue(forKey: "burstObservatory")
+        copy.removeValue(forKey: "observatory")
+        return copy
     }
 
     private static func cappedLog(_ existing: [String: Any]?) -> [String: Any] {
