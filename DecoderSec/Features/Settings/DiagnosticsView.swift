@@ -11,6 +11,7 @@ struct DiagnosticsView: View {
     var body: some View {
         Form {
             Section(String(localized: "Tunnel")) {
+                row(String(localized: "Lifecycle"), tunnel.lifecyclePhase.displaySummary)
                 row(String(localized: "VPN status"), vpnStatusText)
                 row(String(localized: "Core running"), boolText(tunnel.coreRunning))
                 row(String(localized: "Last error"), displayedCoreError)

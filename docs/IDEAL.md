@@ -40,6 +40,11 @@ We do **not** raise the floor to iOS 26-only — that would lock out most sidelo
 - [x] Optional `zh-Hans` catch-up
 - [ ] Signed TestFlight when Apple / ESign certs are ready *(blocked on signing secrets)*
 
+### 5 — Tunnel hardening (beta.26+)
+- [x] Architecture scheme — [`docs/TUNNEL_SCHEME.md`](TUNNEL_SCHEME.md)
+- [x] Lifecycle phases, config size guard, parse-based geo detection
+- [ ] Bundled geo in appex / auto-reconnect after geo download *(P1)*
+
 ## Design north star
 
 One composition on Home: **brand → status → Connect → active config**.  

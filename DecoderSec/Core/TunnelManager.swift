@@ -49,6 +49,7 @@ final class TunnelManager: ObservableObject {
     static let shared = TunnelManager()
 
     @Published private(set) var status: NEVPNStatus = .disconnected
+    @Published private(set) var lifecyclePhase: TunnelLifecyclePhase = .idle
     @Published private(set) var isReady: Bool = false
     @Published private(set) var coreRunning: Bool = false
     @Published private(set) var lastError: String?
@@ -79,6 +80,7 @@ final class TunnelManager: ObservableObject {
             self.manager = m
             self.status = m.connection.status
             self.isReady = true
+            self.updateLifecyclePhase()
             if m.connection.status == .connected {
                 self.didConnect = true
                 if self.connectedAt == nil { self.connectedAt = Date() }
@@ -100,14 +102,8 @@ final class TunnelManager: ObservableObject {
                 didConnect = false
                 coreRunning = false
                 lastError = nil
+                lifecyclePhase = .preparingProfile
                 let m = try await ensureManager(configuration: configuration)
-                if configuration.coreType == .xray {
-                    let configJSON = effectiveContent(for: configuration)
-                    let geoDir = EVCore.resourcesURL(for: .xray)
-                    Task.detached(priority: .utility) {
-                        GeoResourceBootstrap.tryEnsurePresent(forConfig: configJSON, in: geoDir)
-                    }
-                }
                 let payload = TunnelConfigPayload(
                     configContent: effectiveContent(for: configuration),
                     configID: configuration.id.uuidString,
@@ -115,6 +111,8 @@ final class TunnelManager: ObservableObject {
                     dnsServers: AppState.shared.dnsServers,
                     useZashboard: AppState.shared.useZashboardEnabled
                 )
+                try payload.validateSize()
+                lifecyclePhase = .connecting
                 try m.connection.startVPNTunnel(options: payload.asStartOptions)
             } else {
                 pendingReconnect = false
@@ -124,6 +122,7 @@ final class TunnelManager: ObservableObject {
         } catch {
             lastError = Self.userFacingError(error)
             coreRunning = false
+            lifecyclePhase = .failed(lastError ?? error.localizedDescription)
         }
     }
 
@@ -202,6 +201,34 @@ final class TunnelManager: ObservableObject {
                 geoStripped: json["geoStripped"] as? Bool ?? false,
                 sessionSeconds: json["sessionSeconds"] as? Int
             )
+            self.updateLifecyclePhase()
+        }
+    }
+
+    private func updateLifecyclePhase() {
+        if let err = lastError, !err.isEmpty,
+           status == .disconnected || status == .invalid {
+            lifecyclePhase = .failed(err)
+            return
+        }
+
+        switch status {
+        case .invalid, .disconnected:
+            lifecyclePhase = .idle
+        case .connecting, .reasserting:
+            lifecyclePhase = .connecting
+        case .disconnecting:
+            lifecyclePhase = .disconnecting
+        case .connected:
+            if coreRunning {
+                lifecyclePhase = .ready
+            } else if let err = tunnelDiagnostics.coreError, !err.isEmpty {
+                lifecyclePhase = .coreFailed
+            } else {
+                lifecyclePhase = .tunnelUpCorePending
+            }
+        @unknown default:
+            lifecyclePhase = .idle
         }
     }
 
@@ -210,13 +237,15 @@ final class TunnelManager: ObservableObject {
         let proto = (m.protocolConfiguration as? NETunnelProviderProtocol) ?? NETunnelProviderProtocol()
         proto.providerBundleIdentifier = EVCore.Identifier.networkExtension
         proto.serverAddress = BrandIdentity.displayName
-        proto.providerConfiguration = TunnelConfigPayload(
+        let payload = TunnelConfigPayload(
             configContent: effectiveContent(for: configuration),
             configID: configuration.id.uuidString,
             coreType: configuration.coreType,
             dnsServers: AppState.shared.dnsServers,
             useZashboard: AppState.shared.useZashboardEnabled
-        ).asProviderConfiguration
+        )
+        try payload.validateSize()
+        proto.providerConfiguration = payload.asProviderConfiguration
         proto.includeAllNetworks = AppState.shared.tunnelIncludeAllNetworks
         proto.excludeLocalNetworks = !AppState.shared.tunnelIncludeLocalNetworks
         if #available(iOS 16.4, *) {
@@ -264,6 +293,7 @@ final class TunnelManager: ObservableObject {
                 guard connection === self.manager?.connection else { return }
                 let previous = self.status
                 self.status = connection.status
+                self.updateLifecyclePhase()
                 self.scheduleTransitionTimeout(for: connection.status)
                 self.trackConnectFailures(previous: previous, current: connection.status)
                 if connection.status == .connected {
@@ -303,6 +333,7 @@ final class TunnelManager: ObservableObject {
         }
 
         captureStartupFailureReason()
+        updateLifecyclePhase()
     }
 
     /// startVPNTunnel returns before the extension finishes startTunnel — surface NE logs/errors here.
@@ -312,16 +343,19 @@ final class TunnelManager: ObservableObject {
 
         func resolve(from attempt: Int) {
             guard lastError == nil else { return }
-            if let coreError = tunnelDiagnostics.coreError, !coreError.isEmpty {
+            guard let coreError = tunnelDiagnostics.coreError, !coreError.isEmpty {
                 lastError = coreError
+                updateLifecyclePhase()
                 return
             }
             if let line = tunnelLogs.last(where: { logLineLooksLikeFailure($0) }) {
                 lastError = line
+                updateLifecyclePhase()
                 return
             }
             if attempt >= 4 {
                 lastError = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")
+                updateLifecyclePhase()
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in

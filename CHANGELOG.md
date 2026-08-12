@@ -4,6 +4,18 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.26] — 2026-08-12
+
+### Added
+- **`docs/TUNNEL_SCHEME.md`** — полная схема app ↔ Packet Tunnel (mermaid, IPC, geo, приоритеты P0–P2)
+- **`TunnelLifecyclePhase`** — явная машина состояний поверх `NEVPNStatus` + core IPC
+- **`TunnelConfigPayload.validateSize()`** — лимит 512 KiB до сохранения VPN-профиля
+
+### Fixed
+- Убран бесполезный geo pre-warm в host app (sandbox приложения ≠ extension)
+- Geo detection по `routing.rules`, а не substring по всему JSON
+- Settings → Resources: пояснение про разные контейнеры app / NE
+
 ## [0.1.0-beta.25] — 2026-08-12
 
 ### Fixed

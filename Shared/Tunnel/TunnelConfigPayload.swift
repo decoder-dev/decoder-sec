@@ -18,7 +18,24 @@
 
 import Foundation
 
+enum TunnelConfigPayloadError: LocalizedError {
+    case configTooLarge(bytes: Int, limit: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case let .configTooLarge(bytes, limit):
+            let formatter = ByteCountFormatter()
+            formatter.countStyle = .file
+            let have = formatter.string(fromByteCount: Int64(bytes))
+            let max = formatter.string(fromByteCount: Int64(limit))
+            return String(localized: "Configuration is too large for the VPN profile (\(have); limit \(max)). Remove unused outbounds or split the subscription.")
+        }
+    }
+}
+
 struct TunnelConfigPayload {
+    /// Conservative limit — config is duplicated in providerConfiguration and start options.
+    static let maxConfigContentBytes = 512 * 1024
     static let configContentKey = "configContent"
     static let configIDKey = "configID"
     static let coreTypeKey = "coreType"
@@ -45,6 +62,13 @@ struct TunnelConfigPayload {
             Self.dnsServersKey: dnsServers,
             Self.useZashboardKey: useZashboard,
         ]
+    }
+
+    func validateSize() throws {
+        let bytes = configContent.utf8.count
+        guard bytes <= Self.maxConfigContentBytes else {
+            throw TunnelConfigPayloadError.configTooLarge(bytes: bytes, limit: Self.maxConfigContentBytes)
+        }
     }
 
     /// For `NEVPNConnection.startVPNTunnel(options:)` — values must be

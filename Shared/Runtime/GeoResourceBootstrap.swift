@@ -79,11 +79,24 @@ enum GeoResourceBootstrap {
     }
 
     static func referencesGeoip(_ configJSON: String) -> Bool {
-        configJSON.contains("geoip:")
+        routingRuleStrings(in: configJSON, key: "ip").contains { $0.lowercased().hasPrefix("geoip:") }
     }
 
     static func referencesGeosite(_ configJSON: String) -> Bool {
-        configJSON.contains("geosite:")
+        routingRuleStrings(in: configJSON, key: "domain").contains { $0.lowercased().hasPrefix("geosite:") }
+    }
+
+    private static func routingRuleStrings(in configJSON: String, key: String) -> [String] {
+        guard let data = configJSON.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let routing = root["routing"] as? [String: Any],
+              let rules = routing["rules"] as? [[String: Any]] else {
+            return []
+        }
+        return rules.flatMap { rule -> [String] in
+            guard let values = rule[key] as? [Any] else { return [] }
+            return values.compactMap { $0 as? String }
+        }
     }
 
     private static func downloadAsync(from url: URL, to destination: URL, completion: @escaping (Error?) -> Void) {

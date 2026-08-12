@@ -29,6 +29,8 @@ struct ResourcesView: View {
                         }
                     }
                 }
+            } footer: {
+                Text("Files here live in the app sandbox. The Packet Tunnel extension uses a separate container — geo .dat files are downloaded automatically when you connect (see Diagnostics). App Group sharing is not enabled.")
             }
         }
         .navigationTitle("Resources")
