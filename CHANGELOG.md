@@ -4,6 +4,17 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.30] — 2026-08-12
+
+### Fixed
+- **Ядро не стартует (Happ/v2ray конфиги)** — dual-start как Android/libv2ray: сначала minimal normalize (Everywhere-паттерн), затем hardened fallback
+- `EvcoreStopAll` перед стартом; лог `EvcoreStartCore try minimal/hardened`
+- Убрано удаление catch-all routing rules в hardened normalize
+- Diagnostics/IPC: ошибка ядра из Log console, если IPC generic
+
+### Changed
+- `XrayNormalizer.prepareForTunnel` — minimal (TUN + log) vs hardened (DNS/routing/geo strip)
+
 ## [0.1.0-beta.29] — 2026-08-12
 
 ### Added

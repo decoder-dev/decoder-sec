@@ -97,8 +97,9 @@ struct DiagnosticsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if tunnel.status == .connected {
-                tunnel.refreshCoreStatus(retries: 3)
+                tunnel.refreshCoreStatus(retries: 5)
                 tunnel.refreshTraffic()
+                tunnel.refreshLogs()
             }
         }
     }
@@ -108,8 +109,21 @@ struct DiagnosticsView: View {
     }
 
     private var displayedCoreError: String {
-        if let err = tunnel.tunnelDiagnostics.coreError, !err.isEmpty { return err }
+        if let err = tunnel.tunnelDiagnostics.coreError,
+           !err.isEmpty, err != "Core is not running." {
+            return err
+        }
         if let err = tunnel.lastError, !err.isEmpty { return err }
+        if tunnel.status == .connected, !tunnel.coreRunning,
+           let line = tunnel.tunnelLogs.last(where: {
+               $0.lowercased().contains("evcorestartcore") && $0.lowercased().contains("failed")
+           }) {
+            return line
+        }
+        if tunnel.status == .connected, !tunnel.coreRunning,
+           tunnel.lifecyclePhase == .coreFailed || tunnel.lifecyclePhase == .tunnelUpCorePending {
+            return tunnel.lifecyclePhase.displaySummary
+        }
         return "—"
     }
 

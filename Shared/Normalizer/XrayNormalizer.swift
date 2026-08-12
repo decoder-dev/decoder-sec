@@ -9,8 +9,53 @@ enum XrayNormalizer: JSONCoreNormalizer {
     private static let logFloor = "warning"
     private static let logOrder = ["debug", "info", "warning", "error", "none"]
 
+    struct TunnelPreparedConfig {
+        var minimal: String
+        var hardened: String
+    }
+
+    /// App/editor path — hardened normalize without geo strip.
     static func normalize(_ content: String, useZashboard: Bool) throws -> String {
         try normalize(content, useZashboard: useZashboard, stripGeoRules: false)
+    }
+
+    /// Packet Tunnel: Android/v2rayNG pass config close to original; hardened is fallback.
+    static func prepareForTunnel(_ content: String, useZashboard: Bool, stripGeoRules: Bool) throws -> TunnelPreparedConfig {
+        TunnelPreparedConfig(
+            minimal: try normalizeMinimal(content),
+            hardened: try normalize(content, useZashboard: useZashboard, stripGeoRules: stripGeoRules)
+        )
+    }
+
+    /// Everywhere upstream + iOS TUN only — no routing/DNS rewriting (libv2ray / Happ pattern).
+    static func normalizeMinimal(_ content: String) throws -> String {
+        var root = try parseJSONObject(content)
+        root.removeValue(forKey: "burstObservatory")
+        root.removeValue(forKey: "observatory")
+
+        var inbounds = (root["inbounds"] as? [[String: Any]]) ?? []
+        inbounds = inbounds.filter { isTunInbound($0, typeKey: "protocol") }
+
+        if let first = inbounds.firstIndex(where: { isTunInbound($0, typeKey: "protocol") }) {
+            var patched = inbounds[first]
+            patched["protocol"] = "tun"
+            patched["tag"] = decoderTunTag
+            var settings = (patched["settings"] as? [String: Any]) ?? [:]
+            settings["name"] = "utun"
+            settings["MTU"] = tunnelMTU
+            patched["settings"] = settings
+            inbounds[first] = patched
+            removeOtherTunInbounds(&inbounds, keep: first, typeKey: "protocol")
+        } else {
+            inbounds.append([
+                "tag": decoderTunTag,
+                "protocol": "tun",
+                "settings": ["name": "utun", "MTU": tunnelMTU],
+            ])
+        }
+        root["inbounds"] = inbounds
+        root["log"] = cappedLog(root["log"] as? [String: Any])
+        return try serializeJSON(root)
     }
 
     static func normalize(_ content: String, useZashboard _: Bool, stripGeoRules: Bool) throws -> String {
@@ -120,7 +165,6 @@ enum XrayNormalizer: JSONCoreNormalizer {
             }
 
             guard ruleHasSelectors(copy) || copy["outboundTag"] != nil else { return nil }
-            if copy["outboundTag"] != nil && !ruleHasSelectors(copy) { return nil }
             return copy
         }
 

@@ -18,6 +18,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private var coreError: String?
     private var resourcesPathError: String?
     private var lastConfigContent: String?
+    private var lastPreparedXray: XrayNormalizer.TunnelPreparedConfig?
     private var lastCoreType: CoreType = .xray
     private var lastUseZashboard = false
     private var geoStripped = false
@@ -34,6 +35,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         coreError = nil
         resourcesPathError = nil
         lastConfigContent = nil
+        lastPreparedXray = nil
         geoStripped = false
         sessionStartedAt = Date()
         TunnelLogBuffer.shared.append("startTunnel begin")
@@ -100,12 +102,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             }
 
             var coreErr: NSError?
-            let started = EvcoreStartCore(
-                payload.coreType.rawValue,
-                configContent,
-                Int(fd),
-                Self.tunnelMTU,
-                &coreErr
+            _ = EvcoreStopAll(&coreErr)
+            coreErr = nil
+
+            let started = self.startCore(
+                payload: payload,
+                primaryConfig: configContent,
+                tunFD: Int(fd),
+                coreErr: &coreErr
             )
 
             guard started else {
@@ -116,7 +120,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 self.coreStarted = false
                 self.coreError = message
                 TunnelLogBuffer.shared.append("EvcoreStartCore failed: \(message)")
-                // Keep NE alive so the app can read coreError via IPC (Everywhere pattern).
                 completionHandler(nil)
                 return
             }
@@ -127,6 +130,43 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             self.startPathMonitor()
             completionHandler(nil)
         }
+    }
+
+    /// Android libv2ray: pass JSON close to provider config; retry hardened normalize on failure.
+    private func startCore(
+        payload: TunnelConfigPayload,
+        primaryConfig: String,
+        tunFD: Int,
+        coreErr: inout NSError?
+    ) -> Bool {
+        var candidates: [(label: String, json: String)] = [("minimal", primaryConfig)]
+        if payload.coreType == .xray, let prepared = lastPreparedXray, prepared.hardened != prepared.minimal {
+            candidates.append(("hardened", prepared.hardened))
+        }
+
+        for (index, candidate) in candidates.enumerated() {
+            if index > 0 {
+                var stopErr: NSError?
+                _ = EvcoreStopAll(&stopErr)
+                coreErr = nil
+            }
+            TunnelLogBuffer.shared.append("EvcoreStartCore try \(candidate.label) (\(candidate.json.utf8.count) bytes)")
+            if EvcoreStartCore(
+                payload.coreType.rawValue,
+                candidate.json,
+                tunFD,
+                Self.tunnelMTU,
+                &coreErr
+            ) {
+                if index > 0 {
+                    TunnelLogBuffer.shared.append("EvcoreStartCore OK (\(candidate.label) fallback)")
+                }
+                return true
+            }
+            let message = Self.describeCoreError(coreErr)
+            TunnelLogBuffer.shared.append("EvcoreStartCore \(candidate.label) failed: \(message)")
+        }
+        return false
     }
 
     private func prepareConfig(_ payload: TunnelConfigPayload) throws -> String {
@@ -156,7 +196,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             } else if status.needsGeoip || status.needsGeosite {
                 TunnelLogBuffer.shared.append("geo resources ready")
             }
-            return try XrayNormalizer.normalize(raw, useZashboard: payload.useZashboard, stripGeoRules: stripGeo)
+            let prepared = try XrayNormalizer.prepareForTunnel(
+                raw,
+                useZashboard: payload.useZashboard,
+                stripGeoRules: stripGeo
+            )
+            lastPreparedXray = prepared
+            return prepared.minimal
         }
         return try ConfigNormalizer.normalize(raw, for: payload.coreType, useZashboard: payload.useZashboard)
     }

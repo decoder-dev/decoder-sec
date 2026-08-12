@@ -193,6 +193,7 @@ Polling: `TunnelManager.refreshCoreStatus` / `captureStartupFailureReason` с ba
 | **Happ** | Pre-installed geo in app; routing profile has `Geoipurl` / `Geositeurl` for updates | Geo must exist **before** core start — not optional CDN on first connect |
 | **v2rayNG** | `geoip.dat` / `geosite.dat` in APK assets → `SettingsManager.initAssets()` copies to app data on first launch | Same: bundle in appex, `seedBundledGeoIfNeeded` into extension container |
 | **decoder sec.** (beta.29+) | `ThirdParty/geo/` in Packet Tunnel bundle, roscomvpn lists | Strip geo only when bundled + container both miss files |
+| **decoder sec.** (beta.30+) | dual `EvcoreStartCore`: minimal JSON first, hardened fallback | Matches libv2ray «load config as provider gave it» |
 
 Upstream [Everywhere](https://github.com/NodePassProject/Everywhere) uses App Group + user-managed Resources — we keep inline config but adopted Android-style **bundled geo seed**.
 

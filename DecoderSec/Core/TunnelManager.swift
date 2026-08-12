@@ -212,12 +212,16 @@ final class TunnelManager: ObservableObject {
     /// When IPC only returns the generic placeholder, prefer the last EvcoreStartCore line from NE logs.
     private func reconcileCoreErrorFromLogs(fallback: String?, running: Bool) {
         guard !running else { return }
-        let generic = fallback == "Core is not running." || (fallback?.isEmpty != false)
+        let generic = fallback == nil
+            || fallback == "Core is not running."
+            || fallback?.isEmpty == true
         guard generic else { return }
         refreshLogs()
         var diag = tunnelDiagnostics
-        if let line = tunnelLogs.last(where: { $0.contains("EvcoreStartCore failed:") }) {
-            let detail = line.replacingOccurrences(of: "EvcoreStartCore failed: ", with: "")
+        if let line = tunnelLogs.last(where: { $0.contains("EvcoreStartCore") && $0.lowercased().contains("failed") }) {
+            let detail = line.replacingOccurrences(of: "EvcoreStartCore minimal failed: ", with: "")
+                .replacingOccurrences(of: "EvcoreStartCore hardened failed: ", with: "")
+                .replacingOccurrences(of: "EvcoreStartCore failed: ", with: "")
             lastError = detail
             diag.coreError = detail
         } else if let line = tunnelLogs.last(where: { logLineLooksLikeFailure($0) }) {
@@ -271,7 +275,9 @@ final class TunnelManager: ObservableObject {
         case .connected:
             if coreRunning {
                 lifecyclePhase = .ready
-            } else if let err = tunnelDiagnostics.coreError, !err.isEmpty {
+            } else if let err = tunnelDiagnostics.coreError, !err.isEmpty, err != "Core is not running." {
+                lifecyclePhase = .coreFailed
+            } else if lastError != nil {
                 lifecyclePhase = .coreFailed
             } else {
                 lifecyclePhase = .tunnelUpCorePending
