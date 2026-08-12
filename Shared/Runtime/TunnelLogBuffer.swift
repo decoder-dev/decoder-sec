@@ -6,8 +6,16 @@
 //  Full Xray/mihomo/sing-box stdout is not exposed by EverywhereCore —
 //  this captures provider-side events only (start/stop/geo/errors/IPC).
 //
+//  Also mirrors every line to the unified logging system (os_log/Logger).
+//  ESign sideloads have no attached debugger/Xcode console, so when the
+//  appex never reaches `startTunnel` (crash, missing entitlement) this ring
+//  buffer is unreachable via IPC — os_log is the only channel a device log
+//  viewer (Console.app over cable, or a third-party on-device log reader)
+//  can still pick up.
+//
 
 import Foundation
+import os
 
 final class TunnelLogBuffer {
     static let shared = TunnelLogBuffer()
@@ -21,6 +29,10 @@ final class TunnelLogBuffer {
         f.dateFormat = "HH:mm:ss.SSS"
         return f
     }()
+    private let osLogger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.decodersec.app.PacketTunnel",
+        category: "tunnel"
+    )
 
     private init() {}
 
@@ -34,6 +46,7 @@ final class TunnelLogBuffer {
         }
         lock.unlock()
         NSLog("DecoderSec: %@", message)
+        osLogger.log("\(message, privacy: .public)")
     }
 
     func snapshot() -> [String] {

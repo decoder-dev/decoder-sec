@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import os
 
 final class ClientLogBuffer {
     static let shared = ClientLogBuffer()
@@ -21,6 +22,10 @@ final class ClientLogBuffer {
         f.dateFormat = "HH:mm:ss.SSS"
         return f
     }()
+    private let osLogger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.decodersec.app",
+        category: "app"
+    )
 
     private init() {}
 
@@ -34,6 +39,7 @@ final class ClientLogBuffer {
         }
         lock.unlock()
         NSLog("DecoderSecApp: %@", message)
+        osLogger.log("\(message, privacy: .public)")
     }
 
     func snapshot() -> [String] {

@@ -69,6 +69,57 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         ContainerPaths.containerURL.appendingPathComponent("last-core-error.txt")
     }
 
+    private static var initMarkerFileURL: URL {
+        ContainerPaths.containerURL.appendingPathComponent("appex-init-marker.txt")
+    }
+
+    /// Fires the moment iOS instantiates the extension's principal class —
+    /// before `startTunnel` is ever called. ESign sideloads with a missing/
+    /// stripped Network Extension entitlement on the `.appex` typically never
+    /// get this far (the process is refused launch), but if the appex *does*
+    /// launch and then crashes before `startTunnel` runs (bad init elsewhere),
+    /// this is the only line we will ever have a chance to record.
+    override init() {
+        super.init()
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        TunnelLogBuffer.shared.append("PacketTunnelProvider init pid=\(getpid())")
+        let body = "\(stamp) init pid=\(getpid())"
+        _ = body.withCString { ptr -> Int32 in
+            ds_atomic_write(Self.initMarkerFileURL.path, ptr, strlen(ptr))
+        }
+    }
+
+    private static func readInitMarker() -> String? {
+        var len: Int = 0
+        guard let raw = ds_read_file(initMarkerFileURL.path, &len) else { return nil }
+        defer { free(raw) }
+        let text = String(cString: raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    private static var configCacheFileURL: URL {
+        ContainerPaths.containerURL.appendingPathComponent("last-good-config.json")
+    }
+
+    /// Caches the last successfully decoded config as JSON inside this
+    /// extension's own container (no App Groups — app-side never reads it).
+    /// Purely a fallback for `startTunnel` when neither `options` nor a live
+    /// `providerConfiguration` carry a usable `configContent` (see call site).
+    private static func persistConfigCache(_ payload: TunnelConfigPayload) {
+        guard let data = try? JSONSerialization.data(withJSONObject: payload.asProviderConfiguration) else { return }
+        _ = data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Int32 in
+            ds_atomic_write(configCacheFileURL.path, raw.baseAddress, raw.count)
+        }
+    }
+
+    private static func readConfigCache() -> [String: Any]? {
+        var len: Int = 0
+        guard let raw = ds_read_file(configCacheFileURL.path, &len) else { return nil }
+        defer { free(raw) }
+        let data = Data(bytes: raw, count: len)
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
     private func updateStartupStage(_ message: String, log: Bool = true) {
         withState { startupStage = message }
         if log {
@@ -132,8 +183,42 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         TunnelLogBuffer.shared.append("startTunnel begin")
 
         let providerConfig = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration
+        let usePersisted = (options?[TunnelConfigPayload.usePersistedConfigKey] as? NSNumber)?.boolValue ?? false
+        let optionsKeys = options?.keys.sorted().joined(separator: ",") ?? "nil"
+        let providerConfigKeys = providerConfig?.keys.sorted().joined(separator: ",") ?? "nil"
+        TunnelLogBuffer.shared.append(
+            "startTunnel source usePersistedConfig=\(usePersisted) options=[\(optionsKeys)] providerConfiguration=[\(providerConfigKeys)]"
+        )
+        var providerConfigMissing = false
+        if usePersisted, providerConfig == nil {
+            providerConfigMissing = true
+            TunnelLogBuffer.shared.append(
+                "WARNING: usePersistedConfig=true but protocolConfiguration.providerConfiguration is nil — ESign resign may have dropped it"
+            )
+        } else if usePersisted, (providerConfig?[TunnelConfigPayload.configContentKey] as? String)?.isEmpty ?? true {
+            providerConfigMissing = true
+            TunnelLogBuffer.shared.append(
+                "WARNING: usePersistedConfig=true but providerConfiguration has no configContent key"
+            )
+        }
 
-        guard let payload = TunnelConfigPayload.decode(options: options, providerConfiguration: providerConfig) else {
+        var payload = TunnelConfigPayload.decode(options: options, providerConfiguration: providerConfig)
+
+        // Last line of defense when providerConfiguration truly never reached
+        // this process (ESign-stripped plist, or a system-triggered restart
+        // with a corrupted profile): fall back to the last successfully
+        // decoded config this same extension container cached to disk. No
+        // App Groups needed — this file is written/read only by the appex.
+        if payload == nil || providerConfigMissing {
+            if let cached = Self.readConfigCache() {
+                TunnelLogBuffer.shared.append("falling back to on-disk config cache in extension container")
+                if let recovered = TunnelConfigPayload.decode(options: nil, providerConfiguration: cached) {
+                    payload = recovered
+                }
+            }
+        }
+
+        guard let payload else {
             let msg = "missing configContent — start the tunnel from the app once"
             recordCoreFailure(msg)
             TunnelLogBuffer.shared.append(msg)
@@ -142,6 +227,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             ]))
             return
         }
+        Self.persistConfigCache(payload)
 
         withState {
             lastCoreType = payload.coreType
@@ -633,6 +719,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             "minimalBoot": snapshot.usedMinimalBoot,
             "lastErrorFile": Self.lastErrorFileURL.path,
         ]
+        if let initMarker = Self.readInitMarker() {
+            payload["appexInit"] = initMarker
+        }
         if let err = snapshot.error, !err.isEmpty {
             payload["error"] = err
         } else if let persistedError, !snapshot.started {

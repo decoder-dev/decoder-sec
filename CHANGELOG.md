@@ -4,6 +4,19 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.43] — 2026-08-12
+
+### Fixed
+- **Packet Tunnel never reaches `startTunnel` (ESign)** — no fix could previously act on this because the app had no signal beyond "extension stayed silent":
+  - `TunnelManager.ensureManager` now **re-fetches the manager from `loadAllFromPreferences()`** after `saveToPreferences`/`loadFromPreferences` and matches by NE bundle id, using that fresh instance for `startVPNTunnel` — the in-memory manager you just saved is not always the one the system hands back for a live start (Apple/ESign gotcha).
+  - Capture **`NEVPNConnection.lastDisconnectError`** (iOS 16+) on `connecting→disconnected`/`disconnecting` and after the connect watchdog fires; surfaced in `lastError` and `ClientLogBuffer`.
+  - New **~15s connect watchdog**: if still `.connecting`/`.reasserting` with zero extension log lines, logs status + `lastDisconnectError` and sets an actionable "missing Network Extension entitlement on the .appex" error — long before the existing 35s hard reset.
+  - **Dual start fallback**: when the lean `startVPNTunnel` produces no extension logs at all, one automatic retry with `asStartOptions` (full inline config) for configs under 96 KiB, in case an ESign resign dropped `providerConfiguration` off the persisted profile.
+  - `PacketTunnelProvider` now logs from `init()` (before `startTunnel` can ever run) via the ring buffer, `os_log`/`Logger`, and an on-disk `appex-init-marker.txt` in its own container — the only trace we can get if the appex launches and crashes before `startTunnel`.
+  - `startTunnel` logs `usePersistedConfig` / options keys / `providerConfiguration` keys up front, and falls back to an on-disk `last-good-config.json` cache (extension-container-only, no App Groups) when neither `options` nor a live `providerConfiguration` carry a usable `configContent`.
+  - `TunnelLogBuffer` / `ClientLogBuffer` now also mirror every line to unified logging (`os_log` via `Logger`) so a device log viewer can see extension lifecycle even without Xcode attached.
+- Settings version: **0.1.0 (43)**
+
 ## [0.1.0-beta.42] — 2026-08-12
 
 ### Fixed

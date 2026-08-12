@@ -76,6 +76,18 @@ final class TunnelManager: ObservableObject {
     private var transitionTimeoutTask: Task<Void, Never>?
     private static let transitionTimeoutNanos: UInt64 = 35 * 1_000_000_000
 
+    /// Fires ~15s into `.connecting` with no extension log lines yet — long
+    /// before the 35s hard `transitionTimeoutTask` reset — so the user gets
+    /// an actionable ESign-entitlement diagnosis instead of silently waiting.
+    private var connectWatchdogTask: Task<Void, Never>?
+    private static let connectWatchdogNanos: UInt64 = 15 * 1_000_000_000
+
+    /// Retained across a connect attempt so the silent-extension fallback
+    /// (§ dual start) can retry with the full (non-lean) `startVPNTunnel`
+    /// options without the caller having to rebuild the payload.
+    private var pendingFallbackPayload: TunnelConfigPayload?
+    private var didAttemptFullOptionsFallback = false
+
     private init() {
         setupStatusObserver()
         Task { await reload() }
@@ -113,6 +125,8 @@ final class TunnelManager: ObservableObject {
                 didConnect = false
                 coreRunning = false
                 lastError = nil
+                pendingFallbackPayload = nil
+                didAttemptFullOptionsFallback = false
                 lifecyclePhase = .preparingProfile
                 let content = effectiveContent(for: configuration)
                 let bytes = content.utf8.count
@@ -138,7 +152,11 @@ final class TunnelManager: ObservableObject {
                 try payload.validateSize()
                 // Always lean: config lives in providerConfiguration only.
                 // Putting JSON in startVPNTunnel(options:) can kill the appex
-                // before startTunnel on some ESign/resign installs.
+                // before startTunnel on some ESign/resign installs. Keep the
+                // payload around so `attemptFullOptionsFallback` can retry
+                // with `asStartOptions` if the lean path never reaches the
+                // extension (see § dual start fallback).
+                pendingFallbackPayload = payload
                 let options = payload.asLeanStartOptions
                 ClientLogBuffer.shared.append(
                     "startVPNTunnel lean options (config in VPN profile only, \(bytes) bytes)"
@@ -147,9 +165,11 @@ final class TunnelManager: ObservableObject {
                 try m.connection.startVPNTunnel(options: options)
                 ClientLogBuffer.shared.append("startVPNTunnel accepted by system — waiting for Packet Tunnel")
                 mergeClientLogsIntoConsole()
+                scheduleConnectWatchdog()
             } else {
                 pendingReconnect = false
                 coreRunning = false
+                cancelConnectWatchdog()
                 ClientLogBuffer.shared.append("disconnect requested")
                 try await disableTunnel()
                 mergeClientLogsIntoConsole()
@@ -382,7 +402,23 @@ final class TunnelManager: ObservableObject {
 
         try await m.saveToPreferences()
         try await m.loadFromPreferences()
-        if let saved = (m.protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration,
+
+        // Apple/ESign gotcha: the `NETunnelProviderManager` instance you just
+        // saved is not always the instance the system hands back for
+        // `startVPNTunnel` — re-fetch the full list and match by NE bundle id
+        // so we start against the on-disk profile, not a stale in-memory
+        // object. `m.loadFromPreferences()` above refreshes `m`'s own
+        // properties but has been observed (post-ESign-resign) to leave a
+        // manager that `startVPNTunnel` silently no-ops on.
+        let refetched = try await NETunnelProviderManager.loadAllFromPreferences()
+        let fresh = refetched.first(where: {
+            ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == neID
+        }) ?? m
+        ClientLogBuffer.shared.append(
+            "manager refresh after save: candidates=\(refetched.count) usingFreshInstance=\(fresh !== m)"
+        )
+
+        if let saved = (fresh.protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration,
            let savedContent = saved[TunnelConfigPayload.configContentKey] as? String,
            !savedContent.isEmpty {
             ClientLogBuffer.shared.append("VPN profile saved OK (\(savedContent.utf8.count) bytes, ne=\(proto.providerBundleIdentifier ?? "?"))")
@@ -394,8 +430,8 @@ final class TunnelManager: ObservableObject {
                 userInfo: [NSLocalizedDescriptionKey: String(localized: "VPN profile did not keep the configuration. Try a smaller config or reinstall the IPA.")]
             )
         }
-        manager = m
-        return m
+        manager = fresh
+        return fresh
     }
 
     private func disableTunnel() async throws {
@@ -417,11 +453,15 @@ final class TunnelManager: ObservableObject {
                 guard connection === self.manager?.connection else { return }
                 let previous = self.status
                 self.status = connection.status
+                if connection.status != .connecting && connection.status != .reasserting {
+                    self.cancelConnectWatchdog()
+                }
                 self.updateLifecyclePhase()
                 self.scheduleTransitionTimeout(for: connection.status)
                 self.trackConnectFailures(previous: previous, current: connection.status)
                 if connection.status == .connected {
                     self.didConnect = true
+                    self.pendingFallbackPayload = nil
                     if self.connectedAt == nil { self.connectedAt = Date() }
                     self.refreshCoreStatus(retries: 5)
                     self.refreshTraffic()
@@ -452,6 +492,11 @@ final class TunnelManager: ObservableObject {
               previous == .connecting,
               current == .disconnected || current == .disconnecting else { return }
 
+        if let disconnectError = captureLastDisconnectError() {
+            ClientLogBuffer.shared.append("NEVPNConnection.lastDisconnectError: \(disconnectError)")
+            mergeClientLogsIntoConsole()
+        }
+
         if let m = manager, m.isOnDemandEnabled {
             Task { try? await self.disableTunnel() }
             if lastError == nil {
@@ -462,6 +507,21 @@ final class TunnelManager: ObservableObject {
 
         captureStartupFailureReason()
         updateLifecyclePhase()
+    }
+
+    /// `NEVPNConnection.lastDisconnectError` (iOS 16+) carries the system's
+    /// own reason for the most recent disconnect — often the only concrete
+    /// signal we get when the appex is refused launch entirely (e.g. a
+    /// missing Network Extension entitlement after an ESign resign).
+    private func captureLastDisconnectError() -> String? {
+        guard let connection = manager?.connection else { return nil }
+        if #available(iOS 16.0, *) {
+            guard let error = connection.lastDisconnectError else { return nil }
+            let nsError = error as NSError
+            let text = nsError.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? "\(nsError.domain) code=\(nsError.code)" : text
+        }
+        return nil
     }
 
     /// startVPNTunnel returns before the extension finishes startTunnel — surface NE logs/errors here.
@@ -487,13 +547,30 @@ final class TunnelManager: ObservableObject {
             }
             if attempt >= 4 {
                 let extensionSilent = !tunnelLogs.contains(where: { !$0.contains("[app]") })
+                let disconnectError = captureLastDisconnectError()
                 if extensionSilent {
-                    lastError = String(localized: "Packet Tunnel did not start. In ESign: sign the FULL IPA with a paid certificate that has Network Extension / packet-tunnel for BOTH the app and the .appex (free Apple ID cannot run VPN). Then delete the old app, install again, allow the VPN profile.")
+                    // Dual start fallback: some ESign resigns drop
+                    // `providerConfiguration` off the persisted profile, so
+                    // the lean options (no inline config) leave the
+                    // extension with nothing to decode and it never logs.
+                    // Retry once with the full inline options before giving
+                    // up, for configs small enough for the XPC launch path.
+                    if attemptFullOptionsFallback() { return }
+                    var message = String(localized: "Packet Tunnel did not start. In ESign: sign the FULL IPA with a paid certificate that has Network Extension / packet-tunnel for BOTH the app and the .appex (free Apple ID cannot run VPN). Then delete the old app, install again, allow the VPN profile.")
+                    if let disconnectError {
+                        message += " " + String(localized: "System reported: \(disconnectError)")
+                    }
+                    lastError = message
                     ClientLogBuffer.shared.append(
                         "FATAL: extension never logged — \(BundleIdentifiers.extensionPreflightReport()) — check ESign Network Extension entitlement / wrong PacketTunnel bundle id"
+                        + (disconnectError.map { " — lastDisconnectError=\($0)" } ?? "")
                     )
                 } else {
-                    lastError = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")
+                    var message = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")
+                    if let disconnectError {
+                        message += " (\(disconnectError))"
+                    }
+                    lastError = message
                 }
                 mergeClientLogsIntoConsole()
                 updateLifecyclePhase()
@@ -510,6 +587,75 @@ final class TunnelManager: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             resolve(from: 0)
         }
+    }
+
+    /// One automatic retry of `startVPNTunnel` with `asStartOptions` (full
+    /// inline config, not just the lean flag) when the lean start produced
+    /// zero extension logs. Only for configs under
+    /// `TunnelConfigPayload.maxStartOptionsConfigBytes` — large configs are
+    /// exactly what lean options exist to avoid killing the appex for.
+    private func attemptFullOptionsFallback() -> Bool {
+        guard !didAttemptFullOptionsFallback,
+              let payload = pendingFallbackPayload,
+              payload.configContent.utf8.count <= TunnelConfigPayload.maxStartOptionsConfigBytes,
+              let m = manager else { return false }
+        didAttemptFullOptionsFallback = true
+
+        ClientLogBuffer.shared.append(
+            "lean start produced no extension logs — retrying once with full startVPNTunnel options (\(payload.configContent.utf8.count) bytes) in case ESign dropped providerConfiguration"
+        )
+        mergeClientLogsIntoConsole()
+
+        do {
+            lifecyclePhase = .connecting
+            try m.connection.startVPNTunnel(options: payload.asStartOptions)
+            ClientLogBuffer.shared.append("startVPNTunnel (full options) accepted by system — waiting for Packet Tunnel")
+            mergeClientLogsIntoConsole()
+            scheduleConnectWatchdog()
+            return true
+        } catch {
+            ClientLogBuffer.shared.append("full-options retry failed to start: \(error.localizedDescription)")
+            mergeClientLogsIntoConsole()
+            return false
+        }
+    }
+
+    /// Fires ~15s after `startVPNTunnel` is accepted if still `.connecting`
+    /// with no extension log lines at all — well before the 35s hard
+    /// transition-timeout reset — so the user sees an actionable diagnosis
+    /// instead of a silent spinner.
+    private func scheduleConnectWatchdog() {
+        connectWatchdogTask?.cancel()
+        connectWatchdogTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.connectWatchdogNanos)
+            guard !Task.isCancelled, let self else { return }
+            await MainActor.run { self.handleConnectWatchdog() }
+        }
+    }
+
+    private func cancelConnectWatchdog() {
+        connectWatchdogTask?.cancel()
+        connectWatchdogTask = nil
+    }
+
+    private func handleConnectWatchdog() {
+        guard status == .connecting || status == .reasserting else { return }
+        refreshLogs()
+        refreshCoreStatus(retries: 1)
+        let extensionSilent = !tunnelLogs.contains(where: { !$0.contains("[app]") })
+        let disconnectError = captureLastDisconnectError()
+        var probe = "connect watchdog 15s: status=\(status.rawValue) extensionSilent=\(extensionSilent)"
+        if let disconnectError { probe += " lastDisconnectError=\(disconnectError)" }
+        ClientLogBuffer.shared.append(probe)
+        mergeClientLogsIntoConsole()
+
+        guard extensionSilent, lastError == nil else { return }
+        var message = String(localized: "Packet Tunnel has not started after 15s and produced no logs — likely a missing Network Extension / packet-tunnel entitlement on the .appex in this ESign resign. You can keep waiting or disconnect and re-sign with a certificate that includes Network Extension for BOTH the app and the .appex.")
+        if let disconnectError {
+            message += " " + String(localized: "System reported: \(disconnectError)")
+        }
+        lastError = message
+        updateLifecyclePhase()
     }
 
     /// Merge app-side connect logs into the console so empty extension logs are still useful.
