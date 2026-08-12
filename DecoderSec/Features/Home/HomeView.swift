@@ -7,6 +7,7 @@
 
 import NetworkExtension
 import SwiftUI
+import Combine
 
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState

@@ -47,7 +47,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section(String(localized: "Device")) {
+                Section {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(String(localized: "Device ID (HWID)"))
                             .font(.caption)
@@ -65,6 +65,8 @@ struct SettingsView: View {
                             systemImage: hwidCopied ? "checkmark" : "doc.on.doc"
                         )
                     }
+                } header: {
+                    Text(String(localized: "Device"))
                 } footer: {
                     Text(String(localized: "Sent with every subscription request. Share this ID with your provider if you see HWID or “App not supported” errors."))
                 }
