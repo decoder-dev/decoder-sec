@@ -157,13 +157,33 @@ final class RoutingProfileStore: ObservableObject {
 
 enum HappRoutingApplier {
     /// Merge Happ routing profile fields into an Xray JSON config string.
+    ///
+    /// Stability rules:
+    /// - Do not assume outbound tag "proxy" exists.
+    /// - Keep existing routing rules and append them after Happ rules.
+    /// - Avoid destructive DNS overwrite when config already has a DNS section.
     static func apply(profile: HappRoutingProfile, toXrayJSON json: String) throws -> String {
         guard var root = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else {
             throw NSError(domain: "HappRoutingApplier", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "Config is not JSON."])
         }
         let p = profile.rawObject
-        let domainStrategy = (p["DomainStrategy"] as? String) ?? "IPIfNonMatch"
+
+        var outbounds = (root["outbounds"] as? [[String: Any]]) ?? []
+
+        // Ensure block/direct outbounds exist; needed by Happ rules.
+        if !outbounds.contains(where: { ($0["tag"] as? String) == "block" }) {
+            outbounds.append(["tag": "block", "protocol": "blackhole"])
+        }
+        if !outbounds.contains(where: { ($0["tag"] as? String) == "direct" }) {
+            outbounds.append(["tag": "direct", "protocol": "freedom"])
+        }
+
+        let blockTag = "block"
+        let directTag = "direct"
+        let proxyTag = resolveProxyTag(from: outbounds) ?? directTag
+
+        let domainStrategy = (p["DomainStrategy"] as? String)
         let directSites = stringArray(p["DirectSites"])
         let proxySites = stringArray(p["ProxySites"])
         let blockSites = stringArray(p["BlockSites"])
@@ -171,52 +191,57 @@ enum HappRoutingApplier {
         let proxyIp = stringArray(p["ProxyIp"])
         let blockIp = stringArray(p["BlockIp"])
 
-        var rules: [[String: Any]] = []
+        var happRules: [[String: Any]] = []
         if !blockSites.isEmpty || !blockIp.isEmpty {
-            var rule: [String: Any] = ["type": "field", "outboundTag": "block"]
+            var rule: [String: Any] = ["type": "field", "outboundTag": blockTag]
             if !blockSites.isEmpty { rule["domain"] = blockSites }
             if !blockIp.isEmpty { rule["ip"] = blockIp }
-            rules.append(rule)
+            happRules.append(rule)
         }
         if !directSites.isEmpty || !directIp.isEmpty {
-            var rule: [String: Any] = ["type": "field", "outboundTag": "direct"]
+            var rule: [String: Any] = ["type": "field", "outboundTag": directTag]
             if !directSites.isEmpty { rule["domain"] = directSites }
             if !directIp.isEmpty { rule["ip"] = directIp }
-            rules.append(rule)
+            happRules.append(rule)
         }
         if !proxySites.isEmpty || !proxyIp.isEmpty {
-            var rule: [String: Any] = ["type": "field", "outboundTag": "proxy"]
+            var rule: [String: Any] = ["type": "field", "outboundTag": proxyTag]
             if !proxySites.isEmpty { rule["domain"] = proxySites }
             if !proxyIp.isEmpty { rule["ip"] = proxyIp }
-            rules.append(rule)
+            happRules.append(rule)
         }
-        // Final catch-all depends on GlobalProxy.
+
+        // Final catch-all depends on GlobalProxy. If we couldn't resolve a proxy
+        // outbound, this gracefully falls back to direct.
         let globalProxy = boolish(p["GlobalProxy"], default: true)
-        rules.append([
+        happRules.append([
             "type": "field",
-            "outboundTag": globalProxy ? "proxy" : "direct",
+            "outboundTag": globalProxy ? proxyTag : directTag,
             "network": "tcp,udp",
         ])
 
-        root["routing"] = [
-            "domainStrategy": domainStrategy,
-            "rules": rules,
-        ]
+        // Merge with existing routing instead of replacing everything.
+        // Keep non-Happ rules so provider-specific routing logic survives.
+        var routing = (root["routing"] as? [String: Any]) ?? [:]
+        let existingRules = (routing["rules"] as? [[String: Any]]) ?? []
+        let keptExisting = existingRules.filter { !looksLikeManagedHappRule($0, proxyTag: proxyTag, directTag: directTag, blockTag: blockTag) }
+        routing["rules"] = happRules + keptExisting
+        if let domainStrategy, !domainStrategy.isEmpty {
+            routing["domainStrategy"] = domainStrategy
+        } else if routing["domainStrategy"] == nil {
+            routing["domainStrategy"] = "IPIfNonMatch"
+        }
 
-        // Ensure block outbound exists.
-        var outbounds = (root["outbounds"] as? [[String: Any]]) ?? []
-        if !outbounds.contains(where: { ($0["tag"] as? String) == "block" }) {
-            outbounds.append(["tag": "block", "protocol": "blackhole"])
-        }
-        if !outbounds.contains(where: { ($0["tag"] as? String) == "direct" }) {
-            outbounds.append(["tag": "direct", "protocol": "freedom"])
-        }
+        root["routing"] = routing
         root["outbounds"] = outbounds
 
-        // DNS hints from profile (best-effort).
-        if let remote = p["RemoteDNSDomain"] as? String, !remote.isEmpty {
+        // DNS: only apply Happ hints when config has no explicit dns section.
+        if root["dns"] == nil,
+           let remote = p["RemoteDNSDomain"] as? String,
+           !remote.isEmpty {
+            let domestic = p["DomesticDNSDomain"] as? String
             root["dns"] = [
-                "servers": [remote, p["DomesticDNSDomain"] as? String].compactMap { $0 },
+                "servers": [remote, domestic].compactMap { $0 },
                 "queryStrategy": "UseIP",
             ]
         }
@@ -227,6 +252,37 @@ enum HappRoutingApplier {
                           userInfo: [NSLocalizedDescriptionKey: "Failed to serialize JSON."])
         }
         return out
+    }
+
+    private static func resolveProxyTag(from outbounds: [[String: Any]]) -> String? {
+        // Preferred explicit tag
+        if outbounds.contains(where: { ($0["tag"] as? String) == "proxy" }) {
+            return "proxy"
+        }
+
+        // Otherwise pick first non-direct/non-block outbound tag.
+        for item in outbounds {
+            guard let tag = item["tag"] as? String, !tag.isEmpty else { continue }
+            let lower = tag.lowercased()
+            if lower == "direct" || lower == "block" || lower == "dns_out" || lower == "dns-out" {
+                continue
+            }
+            let proto = (item["protocol"] as? String)?.lowercased() ?? ""
+            if proto == "freedom" || proto == "blackhole" {
+                continue
+            }
+            return tag
+        }
+        return nil
+    }
+
+    private static func looksLikeManagedHappRule(_ rule: [String: Any], proxyTag: String, directTag: String, blockTag: String) -> Bool {
+        guard let type = rule["type"] as? String, type == "field" else { return false }
+        guard let outbound = rule["outboundTag"] as? String else { return false }
+        if outbound == proxyTag || outbound == directTag || outbound == blockTag {
+            return true
+        }
+        return false
     }
 
     private static func stringArray(_ any: Any?) -> [String] {

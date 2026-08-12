@@ -17,6 +17,15 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.15] — 2026-08-12
+
+### Fixed
+- Исправлена нестабильность сети после импорта/обновления подписки с Happ routing
+- `HappRoutingApplier` больше не предполагает tag `proxy`; выбирает реальный proxy outbound из конфига
+- Роутинг теперь merge-ится с существующими правилами, а не разрушительно заменяет их
+- DNS секция не перезаписывается, если в подписке уже есть собственный `dns`
+- При refresh/update подписок роутинг применяется повторно для Xray (когда routing enabled)
+
 ## [0.1.0-beta.14] — 2026-08-12
 
 ### Rewrite Phase 2 — зависимости и протоколы

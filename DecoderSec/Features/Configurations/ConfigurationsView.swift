@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct ConfigurationsView: View {
     @EnvironmentObject private var store: ConfigurationStore
     @EnvironmentObject private var tunnel: TunnelManager
+    @EnvironmentObject private var routing: RoutingProfileStore
     @State private var pendingDelete: Configuration?
     @State private var blockedAlert = false
     @State private var fileImporting = false
@@ -270,7 +271,8 @@ struct ConfigurationsView: View {
             defer { isDownloading = false }
             do {
                 let result = try await SubscriptionImporter.fetch(from: url)
-                store.update(config, content: result.content)
+                let content = try applyRoutingIfNeeded(content: result.content, core: config.coreType)
+                store.update(config, content: content)
             } catch {
                 importErrorMessage = error.localizedDescription
             }
@@ -306,7 +308,8 @@ struct ConfigurationsView: View {
             do {
                 guard let raw = config.sourceURL, let url = URL(string: raw) else { continue }
                 let result = try await SubscriptionImporter.fetch(from: url)
-                store.update(config, content: result.content)
+                let content = try applyRoutingIfNeeded(content: result.content, core: config.coreType)
+                store.update(config, content: content)
             } catch {
                 failCount += 1
             }
@@ -315,6 +318,14 @@ struct ConfigurationsView: View {
         if failCount > 0 {
             importErrorMessage = String(localized: "Some subscriptions failed to refresh (\(failCount)).")
         }
+    }
+
+
+    private func applyRoutingIfNeeded(content: String, core: CoreType) throws -> String {
+        guard core == .xray, routing.routingEnabled, let profile = routing.activeProfile else {
+            return content
+        }
+        return try HappRoutingApplier.apply(profile: profile, toXrayJSON: content)
     }
 
     private func derivedName(from url: URL) -> String {
