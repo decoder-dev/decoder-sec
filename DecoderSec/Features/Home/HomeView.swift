@@ -88,8 +88,10 @@ struct HomeView: View {
             .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
                 guard tunnel.status == .connected else { return }
                 metricsTick &+= 1
-                if metricsTick % 3 == 0 {
+                if metricsTick % 5 == 0 {
                     tunnel.refreshTraffic()
+                }
+                if metricsTick % 10 == 0 {
                     tunnel.refreshCoreStatus(retries: 1)
                 }
             }
@@ -288,8 +290,9 @@ struct HomeView: View {
     private var connectControl: some View {
         Button {
             guard let active = store.active else { return }
-            let on = !(tunnel.status == .connected || tunnel.status == .connecting)
-            Task { await tunnel.setEnabled(on, configuration: active) }
+            Task { @MainActor in
+                await tunnel.setEnabled(!tunnel.status.isActive, configuration: active)
+            }
         } label: {
             Text(connectTitle)
                 .font(Brand.Font.display(17))
@@ -387,7 +390,8 @@ struct HomeView: View {
 
     private var connectTitle: String {
         switch tunnel.status {
-        case .connected, .connecting: return String(localized: "Disconnect")
+        case .connected, .connecting, .reasserting: return String(localized: "Disconnect")
+        case .disconnecting: return String(localized: "Disconnecting")
         default: return String(localized: "Connect")
         }
     }
@@ -427,7 +431,6 @@ struct HomeView: View {
 
     private var isToggleDisabled: Bool {
         if !tunnel.isReady { return true }
-        if tunnel.status.isTransitioning { return true }
         return store.active == nil
     }
 }

@@ -100,13 +100,14 @@ final class TunnelManager: ObservableObject {
                 didConnect = false
                 coreRunning = false
                 lastError = nil
-                if configuration.coreType == .xray {
-                    GeoResourceBootstrap.tryEnsurePresent(
-                        forConfig: effectiveContent(for: configuration),
-                        in: EVCore.resourcesURL(for: .xray)
-                    )
-                }
                 let m = try await ensureManager(configuration: configuration)
+                if configuration.coreType == .xray {
+                    let configJSON = effectiveContent(for: configuration)
+                    let geoDir = EVCore.resourcesURL(for: .xray)
+                    Task.detached(priority: .utility) {
+                        GeoResourceBootstrap.tryEnsurePresent(forConfig: configJSON, in: geoDir)
+                    }
+                }
                 let payload = TunnelConfigPayload(
                     configContent: effectiveContent(for: configuration),
                     configID: configuration.id.uuidString,
@@ -188,8 +189,6 @@ final class TunnelManager: ObservableObject {
                 self.lastError = error
             } else if running {
                 self.lastError = nil
-            } else if self.lastError == nil {
-                self.lastError = "Core is not running."
             }
             self.tunnelDiagnostics = TunnelDiagnosticsSnapshot(
                 coreRunning: running,
@@ -203,16 +202,6 @@ final class TunnelManager: ObservableObject {
                 geoStripped: json["geoStripped"] as? Bool ?? false,
                 sessionSeconds: json["sessionSeconds"] as? Int
             )
-            if self.status == .connected, !running {
-                if self.tunnelDiagnostics.geoStripped, self.lastError == nil {
-                    self.lastError = String(localized: "Geo rules were stripped — routing may differ from Happ.")
-                }
-                Task {
-                    try? await Task.sleep(nanoseconds: 15_000_000_000)
-                    guard self.status == .connected, !self.coreRunning else { return }
-                    try? await self.disableTunnel()
-                }
-            }
         }
     }
 

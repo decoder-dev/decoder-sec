@@ -4,8 +4,12 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
-### Planned
-- Signed TestFlight builds (needs Apple / ESign cert secrets)
+## [0.1.0-beta.24] — 2026-08-12
+
+### Fixed
+- **Кнопка Connect не работала** — не блокируется во время connecting/disconnecting (можно отменить); geo pre-warm больше не блокирует `startVPNTunnel`
+- Убрано авто-отключение VPN через 15s при «core failed» (ломало повторное подключение)
+- Меньше агрессивный polling diagnostics/traffic на Home
 
 ## [0.1.0-beta.23] — 2026-08-12
 
