@@ -9,9 +9,9 @@ import NetworkExtension
 import SwiftUI
 
 struct HomeView: View {
-    @ObservedObject private var appState = AppState.shared
-    @ObservedObject private var tunnel = TunnelManager.shared
-    @ObservedObject private var store = ConfigurationStore.shared
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var tunnel: TunnelManager
+    @EnvironmentObject private var store: ConfigurationStore
     @State private var coreSwitchBlocked = false
     @State private var pulse = false
     @State private var showSubscribe = false

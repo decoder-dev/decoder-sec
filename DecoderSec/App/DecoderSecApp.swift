@@ -2,14 +2,11 @@
 //  DecoderSecApp.swift
 //  DecoderSec
 //
-//  Created by NodePassProject on 5/2/26.
-//
 
 import SwiftUI
 
 @main
 struct DecoderSecApp: App {
-    @ObservedObject private var deepLinks = DeepLinkCenter.shared
 
     init() {
         _ = PersistenceController.shared
@@ -18,13 +15,13 @@ struct DecoderSecApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(deepLinks)
+                .modifier(AppEnvironment.modifier)
                 .onOpenURL { url in
-                    deepLinks.handle(url: url)
+                    AppEnvironment.shared.deepLinks.handle(url: url)
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     if let url = activity.webpageURL {
-                        deepLinks.handle(url: url)
+                        AppEnvironment.shared.deepLinks.handle(url: url)
                     }
                 }
         }

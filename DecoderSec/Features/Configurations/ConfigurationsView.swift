@@ -9,8 +9,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ConfigurationsView: View {
-    @ObservedObject private var store = ConfigurationStore.shared
-    @ObservedObject private var tunnel = TunnelManager.shared
+    @EnvironmentObject private var store: ConfigurationStore
+    @EnvironmentObject private var tunnel: TunnelManager
     @State private var pendingDelete: Configuration?
     @State private var blockedAlert = false
     @State private var fileImporting = false

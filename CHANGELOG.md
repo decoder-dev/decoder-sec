@@ -17,6 +17,15 @@ All notable changes to **decoder sec.** are documented here.
 - In-app log console
 - Signed TestFlight builds
 
+## [0.1.0-beta.14] — 2026-08-12
+
+### Rewrite Phase 2 — зависимости и протоколы
+- `EVCore.swift` разбит на три модуля: `BundleIdentifiers`, `ContainerPaths`, `AppSettingsStore`
+- Введены протоколы-швы: `TunnelControlling`, `ConfigurationRepository`, `AppSettingsProviding`
+- `AppEnvironment` — единая точка сборки зависимостей, заменяет прямые `.shared` во всех Views
+- Views (Home, Content, Configs, Settings, Editor) переведены на `@EnvironmentObject` инжекцию
+- `DecoderSecApp` применяет `AppEnvironment.modifier` на корневой сцене
+
 ## [0.1.0-beta.13] — 2026-08-12
 
 ### Changed

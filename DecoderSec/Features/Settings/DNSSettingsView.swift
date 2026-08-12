@@ -16,8 +16,8 @@ private struct DNSServerDraft: Identifiable, Equatable {
 struct DNSSettingsView: View {
     @Environment(\.editMode) private var editMode
     
-    @ObservedObject private var appState = AppState.shared
-    @ObservedObject private var tunnel = TunnelManager.shared
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var tunnel: TunnelManager
     
     @State private var serverDrafts: [DNSServerDraft] = []
     

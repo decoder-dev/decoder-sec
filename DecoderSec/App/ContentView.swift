@@ -9,8 +9,8 @@ import NetworkExtension
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject private var tunnel = TunnelManager.shared
-    @ObservedObject private var store = ConfigurationStore.shared
+    @EnvironmentObject private var tunnel: TunnelManager
+    @EnvironmentObject private var store: ConfigurationStore
     @EnvironmentObject private var deepLinks: DeepLinkCenter
     @State private var minimized: Bool = false
 
@@ -111,9 +111,9 @@ struct ContentView: View {
 }
 
 private struct RunningRootView: View {
-    @ObservedObject private var store = ConfigurationStore.shared
-    @ObservedObject private var appState = AppState.shared
-    @ObservedObject private var tunnel = TunnelManager.shared
+    @EnvironmentObject private var store: ConfigurationStore
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var tunnel: TunnelManager
     @State private var pulse = false
 
     var body: some View {

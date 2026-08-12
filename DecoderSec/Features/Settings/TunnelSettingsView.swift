@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct TunnelSettingsView: View {
-    @ObservedObject private var appState = AppState.shared
-    @ObservedObject private var tunnel = TunnelManager.shared
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var tunnel: TunnelManager
 
     var body: some View {
         Form {

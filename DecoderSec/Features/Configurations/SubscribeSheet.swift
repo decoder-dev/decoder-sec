@@ -9,7 +9,7 @@ import SwiftUI
 
 struct SubscribeSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var deepLinks = DeepLinkCenter.shared
+    @EnvironmentObject private var deepLinks: DeepLinkCenter
     @State private var raw = ""
     @State private var localError: String?
     @FocusState private var focused: Bool

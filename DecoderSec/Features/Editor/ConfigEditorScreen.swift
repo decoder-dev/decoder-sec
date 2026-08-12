@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ConfigEditorScreen: View {
     @ObservedObject var configuration: Configuration
-    @ObservedObject private var store = ConfigurationStore.shared
+    @EnvironmentObject private var store: ConfigurationStore
     @State private var draft: String = ""
 
     var body: some View {

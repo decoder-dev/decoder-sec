@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct RoutingSettingsView: View {
-    @ObservedObject private var routing = RoutingProfileStore.shared
+    @EnvironmentObject private var routing: RoutingProfileStore
 
     var body: some View {
         Form {
