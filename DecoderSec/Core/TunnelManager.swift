@@ -119,6 +119,14 @@ final class TunnelManager: ObservableObject {
                 ClientLogBuffer.shared.append(
                     "connect begin id=\(configuration.id.uuidString.prefix(8)) core=\(configuration.coreType.rawValue) bytes=\(bytes)"
                 )
+                ClientLogBuffer.shared.append(BundleIdentifiers.extensionPreflightReport())
+                guard BundleIdentifiers.hasEmbeddedTunnelExtension else {
+                    lastError = String(localized: "This IPA has no Packet Tunnel extension. Install the full DecoderSec.ipa (not lite) and resign in ESign with Network Extension enabled for app + extension.")
+                    ClientLogBuffer.shared.append("FATAL: no PlugIns/*.appex — lite IPA or broken resign")
+                    lifecyclePhase = .failed(lastError ?? "missing appex")
+                    mergeClientLogsIntoConsole()
+                    return
+                }
                 let m = try await ensureManager(configuration: configuration)
                 let payload = TunnelConfigPayload(
                     configContent: content,
@@ -128,13 +136,12 @@ final class TunnelManager: ObservableObject {
                     useZashboard: AppState.shared.useZashboardEnabled
                 )
                 try payload.validateSize()
-                let options = payload.preferredStartOptions
-                let lean = options[TunnelConfigPayload.usePersistedConfigKey] != nil
-                    && options[TunnelConfigPayload.configContentKey] == nil
+                // Always lean: config lives in providerConfiguration only.
+                // Putting JSON in startVPNTunnel(options:) can kill the appex
+                // before startTunnel on some ESign/resign installs.
+                let options = payload.asLeanStartOptions
                 ClientLogBuffer.shared.append(
-                    lean
-                        ? "startVPNTunnel lean options (config in VPN profile only, \(bytes) bytes)"
-                        : "startVPNTunnel full options (\(bytes) bytes)"
+                    "startVPNTunnel lean options (config in VPN profile only, \(bytes) bytes)"
                 )
                 lifecyclePhase = .connecting
                 try m.connection.startVPNTunnel(options: options)
@@ -320,9 +327,27 @@ final class TunnelManager: ObservableObject {
     }
 
     private func ensureManager(configuration: Configuration) async throws -> NETunnelProviderManager {
-        let m = manager ?? NETunnelProviderManager()
+        let neID = EVCore.Identifier.networkExtension
+        // Drop stale VPN profiles that point at a different/old PacketTunnel id
+        // (common after ESign remap or reinstall).
+        let existing = try await NETunnelProviderManager.loadAllFromPreferences()
+        for stale in existing {
+            let proto = stale.protocolConfiguration as? NETunnelProviderProtocol
+            let id = proto?.providerBundleIdentifier
+            if id != neID {
+                ClientLogBuffer.shared.append("removing stale VPN profile ne=\(id ?? "nil") (want \(neID))")
+                try await stale.removeFromPreferences()
+            }
+        }
+
+        let managers = try await NETunnelProviderManager.loadAllFromPreferences()
+        let m = managers.first(where: {
+            ($0.protocolConfiguration as? NETunnelProviderProtocol)?.providerBundleIdentifier == neID
+        }) ?? NETunnelProviderManager()
+        manager = m
+
         let proto = (m.protocolConfiguration as? NETunnelProviderProtocol) ?? NETunnelProviderProtocol()
-        proto.providerBundleIdentifier = EVCore.Identifier.networkExtension
+        proto.providerBundleIdentifier = neID
         proto.serverAddress = BrandIdentity.displayName
         let payload = TunnelConfigPayload(
             configContent: effectiveContent(for: configuration),
@@ -463,8 +488,10 @@ final class TunnelManager: ObservableObject {
             if attempt >= 4 {
                 let extensionSilent = !tunnelLogs.contains(where: { !$0.contains("[app]") })
                 if extensionSilent {
-                    lastError = String(localized: "Packet Tunnel did not start (no extension logs). Large config is now passed via VPN profile only — reinstall 0.1.0 (40), or check NE signing in ESign.")
-                    ClientLogBuffer.shared.append("FATAL: extension never logged — likely killed before startTunnel or wrong PacketTunnel bundle id")
+                    lastError = String(localized: "Packet Tunnel did not start. In ESign: sign the FULL IPA with a paid certificate that has Network Extension / packet-tunnel for BOTH the app and the .appex (free Apple ID cannot run VPN). Then delete the old app, install again, allow the VPN profile.")
+                    ClientLogBuffer.shared.append(
+                        "FATAL: extension never logged — \(BundleIdentifiers.extensionPreflightReport()) — check ESign Network Extension entitlement / wrong PacketTunnel bundle id"
+                    )
                 } else {
                     lastError = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")
                 }

@@ -4,6 +4,11 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.41] — 2026-08-12
+
+### Fixed
+- **Packet Tunnel never starts (ESign)**: always lean `startVPNTunnel` (config only in VPN profile); remove stale VPN profiles with wrong NE bundle id; appex preflight logs `plugins=[…] matched=…`; clearer error when extension never logs (paid Network Extension cert for app + `.appex`).
+
 ## [0.1.0-beta.40] — 2026-08-12
 
 ### Fixed

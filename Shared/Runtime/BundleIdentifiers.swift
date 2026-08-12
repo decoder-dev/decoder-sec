@@ -30,18 +30,43 @@ enum BundleIdentifiers {
     /// Human-readable VPN profile name shown in Settings → VPN.
     static let tunnelDescription = BrandIdentity.displayName
 
-    private static func embeddedTunnelBundleID() -> String? {
-        guard let plugins = Bundle.main.builtInPlugInsURL else { return nil }
+    /// All embedded `.appex` bundle IDs (empty = IPA missing Packet Tunnel / bad resign).
+    static func embeddedAppexBundleIDs() -> [String] {
+        guard let plugins = Bundle.main.builtInPlugInsURL else { return [] }
         guard let urls = try? FileManager.default.contentsOfDirectory(
             at: plugins,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]
-        ) else { return nil }
-        for url in urls where url.pathExtension == "appex" {
-            if let id = Bundle(url: url)?.bundleIdentifier, !id.isEmpty {
-                return id
-            }
+        ) else { return [] }
+        return urls.compactMap { url -> String? in
+            guard url.pathExtension == "appex" else { return nil }
+            return Bundle(url: url)?.bundleIdentifier
+        }.filter { !$0.isEmpty }
+    }
+
+    /// One-line preflight for Log console before startVPNTunnel.
+    static func extensionPreflightReport() -> String {
+        let ids = embeddedAppexBundleIDs()
+        let ne = networkExtension
+        let matched = ids.contains(ne)
+        return "appex preflight app=\(app) ne=\(ne) plugins=[\(ids.joined(separator: ","))] matched=\(matched)"
+    }
+
+    /// True when the IPA actually embeds a Packet Tunnel appex we can address.
+    static var hasEmbeddedTunnelExtension: Bool {
+        !embeddedAppexBundleIDs().isEmpty
+    }
+
+    private static func embeddedTunnelBundleID() -> String? {
+        let ids = embeddedAppexBundleIDs()
+        // Prefer an appex whose id looks like a tunnel / matches Brand defaults.
+        if let preferred = ids.first(where: {
+            $0.hasSuffix(".PacketTunnel")
+                || $0.lowercased().contains("tunnel")
+                || $0.lowercased().hasSuffix(".ne")
+        }) {
+            return preferred
         }
-        return nil
+        return ids.first
     }
 }
