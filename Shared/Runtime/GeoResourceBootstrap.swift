@@ -9,8 +9,8 @@ enum GeoResourceBootstrap {
     static let geoipFileName = "geoip.dat"
     static let geositeFileName = "geosite.dat"
 
-    private static let geoipURL = URL(string: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat")!
-    private static let geositeURL = URL(string: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat")!
+    private static let geoipURL = URL(string: "https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geoip/release/geoip.dat")!
+    private static let geositeURL = URL(string: "https://cdn.jsdelivr.net/gh/hydraponique/roscomvpn-geosite/release/geosite.dat")!
     private static let downloadTimeout: TimeInterval = 45
 
     struct Status: Equatable {

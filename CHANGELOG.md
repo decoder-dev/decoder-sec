@@ -4,6 +4,11 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.28] — 2026-08-12
+
+### Changed
+- Geo по умолчанию: `hydraponique/roscomvpn` через jsDelivr (`geoip.dat` ~411 KB, `geosite.dat` ~66 KB) вместо Loyalsoldier
+
 ## [0.1.0-beta.27] — 2026-08-12
 
 ### Fixed
