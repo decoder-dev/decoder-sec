@@ -2677,6 +2677,348 @@
           }
         }
       }
+    },
+    "Connected (core failed)": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Connected (core failed)" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Подключено (ядро не запущено)" } }
+      }
+    },
+    "Geo rules were stripped — routing may differ from Happ.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Geo rules were stripped — routing may differ from Happ." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Geo-правила удалены — маршрутизация может отличаться от Happ." } }
+      }
+    },
+    "Servers": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Servers" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Серверы" } }
+      }
+    },
+    "%lld servers": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "%lld servers" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "%lld серверов" } }
+      }
+    },
+    "Device": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Device" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Устройство" } }
+      }
+    },
+    "Device ID (HWID)": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Device ID (HWID)" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "ID устройства (HWID)" } }
+      }
+    },
+    "Copy device ID": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Copy device ID" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Скопировать ID" } }
+      }
+    },
+    "Copied": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Copied" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Скопировано" } }
+      }
+    },
+    "Sent with every subscription request. Share this ID with your provider if you see HWID or “App not supported” errors.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Sent with every subscription request. Share this ID with your provider if you see HWID or “App not supported” errors." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Отправляется с каждым запросом подписки. Передайте этот ID провайдеру при ошибках HWID или «App not supported»." } }
+      }
+    },
+    "yes": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "yes" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "да" } }
+      }
+    },
+    "no": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "no" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "нет" } }
+      }
+    },
+    "none": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "none" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "нет" } }
+      }
+    },
+    "present": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "present" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "есть" } }
+      }
+    },
+    "not required": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "not required" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "не требуется" } }
+      }
+    },
+    "missing (auto-download on connect)": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "missing (auto-download on connect)" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "отсутствует (скачается при подключении)" } }
+      }
+    },
+    "Tunnel": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Tunnel" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Туннель" } }
+      }
+    },
+    "VPN status": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "VPN status" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Статус VPN" } }
+      }
+    },
+    "Core running": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Core running" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Ядро запущено" } }
+      }
+    },
+    "Last error": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Last error" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Последняя ошибка" } }
+      }
+    },
+    "Geo resources": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Geo resources" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Geo-файлы" } }
+      }
+    },
+    "Needs geoip.dat": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Needs geoip.dat" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Нужен geoip.dat" } }
+      }
+    },
+    "Needs geosite.dat": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Needs geosite.dat" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Нужен geosite.dat" } }
+      }
+    },
+    "Geo rules stripped": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Geo rules stripped" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Geo-правила удалены" } }
+      }
+    },
+    "Extension resources path": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Extension resources path" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Путь к ресурсам extension" } }
+      }
+    },
+    "Resources path error": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Resources path error" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Ошибка пути к ресурсам" } }
+      }
+    },
+    "Routing enabled": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Routing enabled" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Routing включён" } }
+      }
+    },
+    "Active routing profile": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Active routing profile" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Активный routing-профиль" } }
+      }
+    },
+    "Profiles count": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Profiles count" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Количество профилей" } }
+      }
+    },
+    "Xray config": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Xray config" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Конфиг Xray" } }
+      }
+    },
+    "Active Xray config": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Active Xray config" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Активный конфиг Xray" } }
+      }
+    },
+    "Outbound tags": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Outbound tags" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Теги outbound" } }
+      }
+    },
+    "Resolved proxy tag": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Resolved proxy tag" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Выбранный proxy tag" } }
+      }
+    },
+    "Routing rules": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Routing rules" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Правила routing" } }
+      }
+    },
+    "Has catch-all": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Has catch-all" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Есть catch-all" } }
+      }
+    },
+    "Has balancer": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Has balancer" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Есть balancer" } }
+      }
+    },
+    "DNS servers": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "DNS servers" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "DNS-серверы" } }
+      }
+    },
+    "Uses geosite/geoip": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Uses geosite/geoip" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Использует geosite/geoip" } }
+      }
+    },
+    "Actions": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Actions" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Действия" } }
+      }
+    },
+    "Refresh core status": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Refresh core status" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Обновить статус ядра" } }
+      }
+    },
+    "Requested tunnel diagnostics.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Requested tunnel diagnostics." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Запрошена диагностика туннеля." } }
+      }
+    },
+    "Result": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Result" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Результат" } }
+      }
+    },
+    "Routing re-applied to %@.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Routing re-applied to %@." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Routing повторно применён к %@." } }
+      }
+    },
+    "connected": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "connected" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "подключено" } }
+      }
+    },
+    "connecting": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "connecting" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "подключение" } }
+      }
+    },
+    "disconnecting": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "disconnecting" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "отключение" } }
+      }
+    },
+    "disconnected": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "disconnected" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "отключено" } }
+      }
+    },
+    "reasserting": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "reasserting" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "переподключение" } }
+      }
+    },
+    "invalid": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "invalid" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "недействителен" } }
+      }
+    },
+    "unknown": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "unknown" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "неизвестно" } }
+      }
+    },
+    "Enable Happ routing": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Enable Happ routing" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Включить Happ routing" } }
+      }
+    },
+    "When enabled, the active Happ routing profile is merged into Xray configs on import/connect. Deep links: happ://routing/onadd/… and happ://routing/off.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "When enabled, the active Happ routing profile is merged into Xray configs on import/connect. Deep links: happ://routing/onadd/… and happ://routing/off." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Активный Happ routing-профиль добавляется в Xray при импорте/подключении. Deep links: happ://routing/onadd/… и happ://routing/off." } }
+      }
+    },
+    "Profiles": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Profiles" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Профили" } }
+      }
+    },
+    "No profiles yet. Open a happ://routing/onadd/… link.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No profiles yet. Open a happ://routing/onadd/… link." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Профилей пока нет. Откройте ссылку happ://routing/onadd/…" } }
+      }
+    },
+    "DNS Servers": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "DNS Servers" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "DNS-серверы" } }
+      }
+    },
+    "Address": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Address" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Адрес" } }
+      }
+    },
+    "Reset to default": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Reset to default" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Сбросить по умолчанию" } }
+      }
+    },
+    "APNs toggle requires iOS 17+.": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "APNs toggle requires iOS 17+." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Переключатель APNs доступен с iOS 17+." } }
+      }
     }
   },
   "version": "1.1"

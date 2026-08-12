@@ -321,7 +321,11 @@ struct HomeView: View {
     private var statusText: String {
         if !tunnel.isReady { return String(localized: "Loading") }
         switch tunnel.status {
-        case .connected: return String(localized: "Connected")
+        case .connected:
+            if !tunnel.coreRunning {
+                return String(localized: "Connected (core failed)")
+            }
+            return String(localized: "Connected")
         case .connecting: return String(localized: "Connecting")
         case .disconnecting: return String(localized: "Disconnecting")
         case .reasserting: return String(localized: "Reconnecting")

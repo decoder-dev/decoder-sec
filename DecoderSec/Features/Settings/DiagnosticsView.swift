@@ -10,59 +10,59 @@ struct DiagnosticsView: View {
 
     var body: some View {
         Form {
-            Section("Tunnel") {
-                row("VPN status", vpnStatusText)
-                row("Core running", tunnel.coreRunning ? "yes" : "no")
-                row("Last error", displayedCoreError)
+            Section(String(localized: "Tunnel")) {
+                row(String(localized: "VPN status"), vpnStatusText)
+                row(String(localized: "Core running"), boolText(tunnel.coreRunning))
+                row(String(localized: "Last error"), displayedCoreError)
             }
 
-            Section("Geo resources") {
-                row("Needs geoip.dat", geoRow(
+            Section(String(localized: "Geo resources")) {
+                row(String(localized: "Needs geoip.dat"), geoRow(
                     tunnel.tunnelDiagnostics.geoNeedsGeoip || (snapshot?.usesGeoRules == true),
                     tunnel.tunnelDiagnostics.geoHasGeoip
                 ))
-                row("Needs geosite.dat", geoRow(
+                row(String(localized: "Needs geosite.dat"), geoRow(
                     tunnel.tunnelDiagnostics.geoNeedsGeosite || (snapshot?.usesGeoRules == true),
                     tunnel.tunnelDiagnostics.geoHasGeosite
                 ))
-                row("Geo rules stripped", tunnel.tunnelDiagnostics.geoStripped ? "yes" : "no")
+                row(String(localized: "Geo rules stripped"), boolText(tunnel.tunnelDiagnostics.geoStripped))
                 if let path = tunnel.tunnelDiagnostics.resourcesPath {
-                    row("Extension resources path", path)
+                    row(String(localized: "Extension resources path"), path)
                 }
                 if let err = tunnel.tunnelDiagnostics.resourcesPathError {
-                    row("Resources path error", err)
+                    row(String(localized: "Resources path error"), err)
                 }
             }
 
-            Section("Routing") {
-                row("Routing enabled", routing.routingEnabled ? "yes" : "no")
-                row("Active routing profile", routing.activeProfile?.name ?? "none")
-                row("Profiles count", "\(routing.profiles.count)")
+            Section(String(localized: "Routing")) {
+                row(String(localized: "Routing enabled"), boolText(routing.routingEnabled))
+                row(String(localized: "Active routing profile"), routing.activeProfile?.name ?? String(localized: "none"))
+                row(String(localized: "Profiles count"), "\(routing.profiles.count)")
             }
 
-            Section("Xray config") {
-                row("Active Xray config", activeXray?.name ?? "none")
-                row("Outbound tags", snapshot?.outboundTags.joined(separator: ", ") ?? "—")
-                row("Resolved proxy tag", snapshot?.resolvedProxyTag ?? "none")
-                row("Routing rules", snapshot.map { "\($0.routingRuleCount)" } ?? "—")
-                row("Has catch-all", snapshot?.hasCatchAll == true ? "yes" : "no")
-                row("Has balancer", snapshot?.hasBalancer == true ? "yes" : "no")
-                row("DNS servers", snapshot?.dnsServers.joined(separator: ", ") ?? "—")
-                row("Uses geosite/geoip", snapshot?.usesGeoRules == true ? "yes" : "no")
+            Section(String(localized: "Xray config")) {
+                row(String(localized: "Active Xray config"), activeXray?.name ?? String(localized: "none"))
+                row(String(localized: "Outbound tags"), snapshot?.outboundTags.joined(separator: ", ") ?? "—")
+                row(String(localized: "Resolved proxy tag"), snapshot?.resolvedProxyTag ?? String(localized: "none"))
+                row(String(localized: "Routing rules"), snapshot.map { "\($0.routingRuleCount)" } ?? "—")
+                row(String(localized: "Has catch-all"), boolText(snapshot?.hasCatchAll == true))
+                row(String(localized: "Has balancer"), boolText(snapshot?.hasBalancer == true))
+                row(String(localized: "DNS servers"), snapshot?.dnsServers.joined(separator: ", ") ?? "—")
+                row(String(localized: "Uses geosite/geoip"), boolText(snapshot?.usesGeoRules == true))
             }
 
-            Section("Actions") {
-                Button("Refresh core status") {
+            Section(String(localized: "Actions")) {
+                Button(String(localized: "Refresh core status")) {
                     tunnel.refreshCoreStatus(retries: 3)
-                    note = "Requested tunnel diagnostics."
+                    note = String(localized: "Requested tunnel diagnostics.")
                 }
 
-                Button("Re-apply Happ routing to active Xray") {
+                Button(String(localized: "Re-apply Happ routing to active Xray")) {
                     reapplyRouting()
                 }
                 .disabled(activeXray == nil || !routing.routingEnabled || routing.activeProfile == nil)
 
-                Button("Reconnect VPN") {
+                Button(String(localized: "Reconnect VPN")) {
                     Task {
                         if tunnel.status.isActive {
                             await tunnel.setEnabled(false, configuration: store.active)
@@ -74,19 +74,23 @@ struct DiagnosticsView: View {
             }
 
             if let note {
-                Section("Result") {
+                Section(String(localized: "Result")) {
                     Text(note)
                         .font(.footnote)
                 }
             }
         }
-        .navigationTitle("Diagnostics")
+        .navigationTitle(String(localized: "Diagnostics"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if tunnel.status == .connected {
                 tunnel.refreshCoreStatus(retries: 3)
             }
         }
+    }
+
+    private func boolText(_ value: Bool) -> String {
+        value ? String(localized: "yes") : String(localized: "no")
     }
 
     private var displayedCoreError: String {
@@ -96,8 +100,10 @@ struct DiagnosticsView: View {
     }
 
     private func geoRow(_ needed: Bool, _ present: Bool) -> String {
-        if !needed { return "not required" }
-        return present ? "present" : "missing (auto-download on connect)"
+        if !needed { return String(localized: "not required") }
+        return present
+            ? String(localized: "present")
+            : String(localized: "missing (auto-download on connect)")
     }
 
     private var activeXray: Configuration? {
@@ -114,13 +120,13 @@ struct DiagnosticsView: View {
 
     private var vpnStatusText: String {
         switch tunnel.status {
-        case .connected: return "connected"
-        case .connecting: return "connecting"
-        case .disconnecting: return "disconnecting"
-        case .disconnected: return "disconnected"
-        case .reasserting: return "reasserting"
-        case .invalid: return "invalid"
-        @unknown default: return "unknown"
+        case .connected: return String(localized: "connected")
+        case .connecting: return String(localized: "connecting")
+        case .disconnecting: return String(localized: "disconnecting")
+        case .disconnected: return String(localized: "disconnected")
+        case .reasserting: return String(localized: "reasserting")
+        case .invalid: return String(localized: "invalid")
+        @unknown default: return String(localized: "unknown")
         }
     }
 
@@ -138,19 +144,19 @@ struct DiagnosticsView: View {
 
     private func reapplyRouting() {
         guard let cfg = activeXray else {
-            note = "No active Xray configuration."
+            note = String(localized: "No active Xray configuration.")
             return
         }
         guard routing.routingEnabled, let profile = routing.activeProfile else {
-            note = "Routing is disabled or no active routing profile."
+            note = String(localized: "Routing is disabled or no active routing profile.")
             return
         }
         do {
             let updated = try HappRoutingApplier.apply(profile: profile, toXrayJSON: cfg.content)
             store.update(cfg, content: updated)
-            note = "Routing re-applied to \(cfg.name)."
+            note = String(format: String(localized: "Routing re-applied to %@."), cfg.name)
         } catch {
-            note = "Routing apply failed: \(error.localizedDescription)"
+            note = String(format: String(localized: "Routing apply failed: %@"), error.localizedDescription)
         }
     }
 }

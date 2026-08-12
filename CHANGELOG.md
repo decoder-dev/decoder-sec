@@ -4,18 +4,26 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
-### Changed
-- Rewrite blueprint: `docs/REWRITE_BLUEPRINT.md` — target module structure,
-  migration sequence, compatibility constraints, and release checklist.
-- Internal: app ↔ Packet Tunnel config handoff now goes through a single
-  typed `TunnelConfigPayload` (`Shared/Tunnel/TunnelConfigPayload.swift`)
-  instead of hand-rolled dictionaries in `TunnelManager` and
-  `PacketTunnelProvider`. No behavior or wire-format change.
-
 ### Planned
-- Subscription UX (node list / one-tap connect)
 - In-app log console
 - Signed TestFlight builds
+
+## [0.1.0-beta.22] — 2026-08-12
+
+### Added
+- **Выбор сервера** — список outbound-узлов в конфиге (swipe «Серверы» или sheet), выбор сохраняется и применяется при подключении
+- **Device ID (HWID)** в Settings → Устройство: копирование ID для провайдера
+- Статус **«Подключено (ядро не запущено)»** на Home при VPN без Xray
+
+### Fixed
+- **XrayNormalizer** — только TUN inbound + sniffing (http/tls/quic), strip geo/balancer, catch-all на proxy, `IPIfNonMatch`
+- **GeoResourceBootstrap** — параллельная загрузка geoip/geosite с таймаутом 45s в extension
+- **TunnelManager** — pre-warm geo, `waitForTerminalStatus`, ошибки не стираются при disconnect, auto-disconnect через 15s если core не стартовал
+- **quickConnect** — корректная смена конфига без гонки disconnect/connect
+
+### Changed
+- Diagnostics, DNS, Happ routing, Tunnel settings — полная RU-локализация
+- Tunnel settings: APNs (iOS 17+) и Cellular (iOS 16.4+) скрыты на неподдерживаемых версиях
 
 ## [0.1.0-beta.21] — 2026-08-12
 

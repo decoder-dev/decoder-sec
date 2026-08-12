@@ -85,10 +85,15 @@ final class TunnelManager: ObservableObject {
                 didConnect = false
                 coreRunning = false
                 lastError = nil
-                // Keep previous diagnostics until the new session reports.
+                if configuration.coreType == .xray {
+                    GeoResourceBootstrap.tryEnsurePresent(
+                        forConfig: effectiveContent(for: configuration),
+                        in: EVCore.resourcesURL(for: .xray)
+                    )
+                }
                 let m = try await ensureManager(configuration: configuration)
                 let payload = TunnelConfigPayload(
-                    configContent: configuration.content,
+                    configContent: effectiveContent(for: configuration),
                     configID: configuration.id.uuidString,
                     coreType: configuration.coreType,
                     dnsServers: AppState.shared.dnsServers,
@@ -144,6 +149,20 @@ final class TunnelManager: ObservableObject {
         lastError = nil
     }
 
+    func waitForTerminalStatus(timeoutSeconds: Double = 30) async {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        while status.isTransitioning, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+    }
+
+    func effectiveContent(for configuration: Configuration) -> String {
+        if configuration.coreType == .xray {
+            return XrayNodeSelection.applySelection(to: configuration.content, configID: configuration.id)
+        }
+        return configuration.content
+    }
+
     func refreshCoreStatus(retries: Int = 1) {
         queryTunnelMessage(type: "diagnostics", retries: retries) { [weak self] json in
             guard let self else { return }
@@ -168,11 +187,12 @@ final class TunnelManager: ObservableObject {
                 geoHasGeosite: json["geoHasGeosite"] as? Bool ?? false,
                 geoStripped: json["geoStripped"] as? Bool ?? false
             )
-            // Keep the tunnel up briefly when core failed so Diagnostics can show the error.
-            // User can disconnect manually; we only auto-stop after a short delay.
             if self.status == .connected, !running {
+                if self.tunnelDiagnostics.geoStripped, self.lastError == nil {
+                    self.lastError = String(localized: "Geo rules were stripped — routing may differ from Happ.")
+                }
                 Task {
-                    try? await Task.sleep(nanoseconds: 8_000_000_000)
+                    try? await Task.sleep(nanoseconds: 15_000_000_000)
                     guard self.status == .connected, !self.coreRunning else { return }
                     try? await self.disableTunnel()
                 }
@@ -186,7 +206,7 @@ final class TunnelManager: ObservableObject {
         proto.providerBundleIdentifier = EVCore.Identifier.networkExtension
         proto.serverAddress = BrandIdentity.displayName
         proto.providerConfiguration = TunnelConfigPayload(
-            configContent: configuration.content,
+            configContent: effectiveContent(for: configuration),
             configID: configuration.id.uuidString,
             coreType: configuration.coreType,
             dnsServers: AppState.shared.dnsServers,

@@ -2,9 +2,6 @@
 //  GeoResourceBootstrap.swift
 //  Shared/Runtime
 //
-//  Geo files live in the Packet Tunnel container (no App Groups). Missing
-//  geosite/geoip.dat is a common reason EvcoreStartCore fails for Happ configs.
-//
 
 import Foundation
 
@@ -14,7 +11,7 @@ enum GeoResourceBootstrap {
 
     private static let geoipURL = URL(string: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat")!
     private static let geositeURL = URL(string: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat")!
-    private static let downloadTimeout: TimeInterval = 12
+    private static let downloadTimeout: TimeInterval = 45
 
     struct Status: Equatable {
         var directory: String
@@ -31,8 +28,7 @@ enum GeoResourceBootstrap {
             var missing: [String] = []
             if needsGeoip && !hasGeoip { missing.append(geoipFileName) }
             if needsGeosite && !hasGeosite { missing.append(geositeFileName) }
-            guard !missing.isEmpty else { return nil }
-            return missing.joined(separator: ", ")
+            return missing.isEmpty ? nil : missing.joined(separator: ", ")
         }
     }
 
@@ -47,56 +43,71 @@ enum GeoResourceBootstrap {
         )
     }
 
-    /// Best-effort download. Returns without throwing when download fails —
-    /// caller should strip geo rules if files are still missing.
-    static func tryEnsurePresent(forConfig configJSON: String, in directory: URL) {
+    static func ensurePresentBlocking(forConfig configJSON: String, in directory: URL) throws {
         let snapshot = status(forConfig: configJSON, in: directory)
         guard !snapshot.isReady else { return }
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let group = DispatchGroup()
+        var firstError: Error?
+
         if snapshot.needsGeoip && !snapshot.hasGeoip {
             group.enter()
-            downloadAsync(from: geoipURL, to: directory.appendingPathComponent(geoipFileName)) {
+            downloadAsync(from: geoipURL, to: directory.appendingPathComponent(geoipFileName)) { error in
+                if let error, firstError == nil { firstError = error }
                 group.leave()
             }
         }
         if snapshot.needsGeosite && !snapshot.hasGeosite {
             group.enter()
-            downloadAsync(from: geositeURL, to: directory.appendingPathComponent(geositeFileName)) {
+            downloadAsync(from: geositeURL, to: directory.appendingPathComponent(geositeFileName)) { error in
+                if let error, firstError == nil { firstError = error }
                 group.leave()
             }
         }
-        _ = group.wait(timeout: .now() + downloadTimeout + 2)
+
+        let wait = group.wait(timeout: .now() + downloadTimeout)
+        if wait == .timedOut {
+            throw NSError(domain: "GeoResourceBootstrap", code: -3,
+                          userInfo: [NSLocalizedDescriptionKey: "Geo download timed out after \(Int(downloadTimeout))s."])
+        }
+        if let firstError { throw firstError }
+    }
+
+    static func tryEnsurePresent(forConfig configJSON: String, in directory: URL) {
+        try? ensurePresentBlocking(forConfig: configJSON, in: directory)
     }
 
     static func referencesGeoip(_ configJSON: String) -> Bool {
-        configJSON.range(of: #"geoip:"#, options: .regularExpression) != nil
-            || configJSON.contains("\"geoip:")
-            || configJSON.contains("geoip:")
+        configJSON.contains("geoip:")
     }
 
     static func referencesGeosite(_ configJSON: String) -> Bool {
-        configJSON.range(of: #"geosite:"#, options: .regularExpression) != nil
-            || configJSON.contains("\"geosite:")
-            || configJSON.contains("geosite:")
+        configJSON.contains("geosite:")
     }
 
-    private static func downloadAsync(from url: URL, to destination: URL, completion: @escaping () -> Void) {
+    private static func downloadAsync(from url: URL, to destination: URL, completion: @escaping (Error?) -> Void) {
         let task = URLSession.shared.downloadTask(with: url) { tempURL, response, error in
-            defer { completion() }
-            guard error == nil, let tempURL else { return }
-            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) { return }
-            let fm = FileManager.default
-            try? fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if fm.fileExists(atPath: destination.path) {
-                try? fm.removeItem(at: destination)
+            if let error { completion(error); return }
+            guard let tempURL else {
+                completion(NSError(domain: "GeoResourceBootstrap", code: -2,
+                                 userInfo: [NSLocalizedDescriptionKey: "Geo download returned no file."]))
+                return
             }
-            try? fm.moveItem(at: tempURL, to: destination)
+            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                completion(NSError(domain: "GeoResourceBootstrap", code: http.statusCode,
+                                   userInfo: [NSLocalizedDescriptionKey: "Geo download failed (HTTP \(http.statusCode))."]))
+                return
+            }
+            do {
+                let fm = FileManager.default
+                if fm.fileExists(atPath: destination.path) { try fm.removeItem(at: destination) }
+                try fm.moveItem(at: tempURL, to: destination)
+                completion(nil)
+            } catch {
+                completion(error)
+            }
         }
         task.resume()
-        DispatchQueue.global().asyncAfter(deadline: .now() + downloadTimeout) {
-            task.cancel()
-        }
     }
 }

@@ -19,6 +19,7 @@ struct ConfigurationsView: View {
     @State private var importErrorMessage: String?
     @State private var showSubscribe = false
     @State private var isRefreshingAll = false
+    @State private var pendingNodeConfig: Configuration?
 
     private var activeID: UUID? { store.activeIDByCoreType[store.selectedCore] }
 
@@ -37,6 +38,14 @@ struct ConfigurationsView: View {
                         Label(String(localized: "Connect"), systemImage: "bolt.fill")
                     }
                     .tint(.mint)
+                    if config.coreType == .xray, XrayNodeCatalog.nodes(from: config.content).count > 1 {
+                        Button {
+                            pendingNodeConfig = config
+                        } label: {
+                            Label(String(localized: "Servers"), systemImage: "list.bullet")
+                        }
+                        .tint(.blue)
+                    }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     if config.sourceURL != nil {
@@ -123,6 +132,11 @@ struct ConfigurationsView: View {
         .sheet(isPresented: $showSubscribe) {
             SubscribeSheet()
         }
+        .sheet(item: $pendingNodeConfig) { config in
+            NavigationView {
+                NodePickerView(configuration: config)
+            }
+        }
         .fileImporter(
             isPresented: $fileImporting,
             allowedContentTypes: [.json, .yaml, .text, .data, .item],
@@ -130,26 +144,26 @@ struct ConfigurationsView: View {
         ) { result in
             handleFileImport(result)
         }
-        .alert("Tunnel is running", isPresented: $blockedAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Stop the tunnel before switching the active configuration or deleting the active one.")
-        }
-        .alert("Import error", isPresented: importErrorBinding, presenting: importErrorMessage) { _ in
-            Button("OK", role: .cancel) {}
+        .alert(String(localized: "Import error"), isPresented: importErrorBinding, presenting: importErrorMessage) { _ in
+            Button(String(localized: "OK"), role: .cancel) {}
         } message: { msg in
             Text(msg)
         }
+        .alert(String(localized: "Tunnel is running"), isPresented: $blockedAlert) {
+            Button(String(localized: "OK"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "Stop the tunnel before switching the active configuration or deleting the active one."))
+        }
         .confirmationDialog(
-            "Delete configuration?",
+            String(localized: "Delete configuration?"),
             isPresented: deleteDialogBinding,
             titleVisibility: .visible,
             presenting: pendingDelete
         ) { config in
-            Button("Delete \(config.name)", role: .destructive) {
+            Button(String(format: String(localized: "Delete %@"), config.name), role: .destructive) {
                 delete(config)
             }
-            Button("Cancel", role: .cancel) { pendingDelete = nil }
+            Button(String(localized: "Cancel"), role: .cancel) { pendingDelete = nil }
         }
     }
 
@@ -164,10 +178,20 @@ struct ConfigurationsView: View {
             VStack(alignment: .leading) {
                 Text(config.name)
                     .lineLimit(1)
-                Text(config.sourceURL ?? String(localized: "Local"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(config.sourceURL ?? String(localized: "Local"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    if config.coreType == .xray {
+                        let count = XrayNodeCatalog.nodes(from: config.content).count
+                        if count > 1 {
+                            Text(String(format: String(localized: "%lld servers"), count))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
             Spacer()
             Button {
@@ -286,6 +310,7 @@ struct ConfigurationsView: View {
         Task { @MainActor in
             if tunnel.status.isActive {
                 await tunnel.setEnabled(false, configuration: store.active)
+                await tunnel.waitForTerminalStatus()
             }
             store.setActive(config)
             await tunnel.setEnabled(true, configuration: config)

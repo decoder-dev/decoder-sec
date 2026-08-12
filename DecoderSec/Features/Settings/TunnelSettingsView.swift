@@ -2,8 +2,6 @@
 //  TunnelSettingsView.swift
 //  DecoderSec
 //
-//  Created by NodePassProject on 5/17/26.
-//
 
 import SwiftUI
 
@@ -14,17 +12,25 @@ struct TunnelSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Include All Networks", isOn: $appState.tunnelIncludeAllNetworks)
+                Toggle(String(localized: "Include All Networks"), isOn: $appState.tunnelIncludeAllNetworks)
             }
-            
+
             Section {
-                Toggle("Include Local Networks", isOn: $appState.tunnelIncludeLocalNetworks)
-                Toggle("Include APNs", isOn: $appState.tunnelIncludeAPNs)
-                Toggle("Include Cellular Services", isOn: $appState.tunnelIncludeCellularServices)
+                Toggle(String(localized: "Include Local Networks"), isOn: $appState.tunnelIncludeLocalNetworks)
+                if #available(iOS 17.0, *) {
+                    Toggle(String(localized: "Include APNs"), isOn: $appState.tunnelIncludeAPNs)
+                }
+                if #available(iOS 16.4, *) {
+                    Toggle(String(localized: "Include Cellular Services"), isOn: $appState.tunnelIncludeCellularServices)
+                }
+            } footer: {
+                if #unavailable(iOS 17.0) {
+                    Text(String(localized: "APNs toggle requires iOS 17+."))
+                }
             }
             .disabled(!appState.tunnelIncludeAllNetworks)
         }
-        .navigationTitle("Tunnel")
+        .navigationTitle(String(localized: "Tunnel"))
         .navigationBarTitleDisplayMode(.inline)
         .disabled(tunnel.pendingReconnect)
         .onChange(of: appState.tunnelIncludeAllNetworks) { _ in

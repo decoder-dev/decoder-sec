@@ -25,18 +25,18 @@ We do **not** raise the floor to iOS 26-only — that would lock out most sidelo
 - [x] Align `MARKETING_VERSION` with git tags (`0.1.0`)
 
 ### 2 — Subscription UX (next)
-- [ ] Node / profile list after import (already multi-config for Xray arrays)
-- [ ] One-tap activate + connect from list
-- [ ] Pull-to-refresh subscription update
-- [ ] Clear HWID / “App not supported” errors in UI
+- [x] Node / profile list after import (already multi-config for Xray arrays)
+- [x] One-tap activate + connect from list
+- [x] Pull-to-refresh subscription update
+- [x] Clear HWID / “App not supported” errors in UI
 
 ### 3 — Session & ops
 - [ ] In-app log console (tunnel / core)
 - [ ] Latency / traffic readout when EverywhereCore exposes it
-- [ ] Tunnel settings: hide APNs/cellular toggles below OS that support them
+- [x] Tunnel settings: hide APNs/cellular toggles below OS that support them
 
 ### 4 — Localization & release
-- [ ] Finish `ru` / `en` for Settings literals
+- [x] Finish `ru` / `en` for Settings literals
 - [ ] Optional `zh-Hans` catch-up
 - [ ] Signed TestFlight when Apple / ESign certs are ready
 

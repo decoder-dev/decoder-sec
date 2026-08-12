@@ -13,14 +13,14 @@ struct RoutingSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Enable Happ routing", isOn: $routing.routingEnabled)
+                Toggle(String(localized: "Enable Happ routing"), isOn: $routing.routingEnabled)
             } footer: {
-                Text("When enabled, the active Happ routing profile is merged into Xray configs on import/connect. Deep links: happ://routing/onadd/… and happ://routing/off.")
+                Text(String(localized: "When enabled, the active Happ routing profile is merged into Xray configs on import/connect. Deep links: happ://routing/onadd/… and happ://routing/off."))
             }
 
-            Section("Profiles") {
+            Section(String(localized: "Profiles")) {
                 if routing.profiles.isEmpty {
-                    Text("No profiles yet. Open a happ://routing/onadd/… link.")
+                    Text(String(localized: "No profiles yet. Open a happ://routing/onadd/… link."))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(routing.profiles) { profile in
@@ -50,7 +50,7 @@ struct RoutingSettingsView: View {
                 }
             }
         }
-        .navigationTitle("Happ routing")
+        .navigationTitle(String(localized: "Happ routing"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -117,26 +117,24 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private func prepareConfig(_ payload: TunnelConfigPayload) throws -> String {
+        let raw = XrayNodeSelection.applySelection(to: payload.configContent, configID: UUID(uuidString: payload.configID) ?? UUID())
         if payload.coreType == .xray {
             let dir = EVCore.resourcesURL(for: .xray)
-            GeoResourceBootstrap.tryEnsurePresent(forConfig: payload.configContent, in: dir)
-            let status = GeoResourceBootstrap.status(forConfig: payload.configContent, in: dir)
+            GeoResourceBootstrap.tryEnsurePresent(forConfig: raw, in: dir)
+            do {
+                try GeoResourceBootstrap.ensurePresentBlocking(forConfig: raw, in: dir)
+            } catch {
+                NSLog("DecoderSec: geo download failed: \(error.localizedDescription)")
+            }
+            let status = GeoResourceBootstrap.status(forConfig: raw, in: dir)
             let stripGeo = !status.isReady
             geoStripped = stripGeo
             if stripGeo, let missing = status.missingSummary {
-                NSLog("DecoderSec: missing geo files (\(missing)) — stripping geosite/geoip rules")
+                NSLog("DecoderSec: missing geo (\(missing)) — stripping geosite/geoip rules")
             }
-            return try XrayNormalizer.normalize(
-                payload.configContent,
-                useZashboard: payload.useZashboard,
-                stripGeoRules: stripGeo
-            )
+            return try XrayNormalizer.normalize(raw, useZashboard: payload.useZashboard, stripGeoRules: stripGeo)
         }
-        return try ConfigNormalizer.normalize(
-            payload.configContent,
-            for: payload.coreType,
-            useZashboard: payload.useZashboard
-        )
+        return try ConfigNormalizer.normalize(raw, for: payload.coreType, useZashboard: payload.useZashboard)
     }
 
     override func stopTunnel(with _: NEProviderStopReason, completionHandler: @escaping () -> Void) {

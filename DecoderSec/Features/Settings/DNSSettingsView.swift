@@ -2,8 +2,6 @@
 //  DNSSettingsView.swift
 //  DecoderSec
 //
-//  Created by NodePassProject on 5/2/26.
-//
 
 import SwiftUI
 import Network
@@ -15,12 +13,12 @@ private struct DNSServerDraft: Identifiable, Equatable {
 
 struct DNSSettingsView: View {
     @Environment(\.editMode) private var editMode
-    
+
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var tunnel: TunnelManager
-    
+
     @State private var serverDrafts: [DNSServerDraft] = []
-    
+
     private var isEditing: Bool {
         if editMode?.wrappedValue.isEditing == true { return true }
         return false
@@ -28,10 +26,10 @@ struct DNSSettingsView: View {
 
     var body: some View {
         Form {
-            Section("DNS Servers") {
+            Section(String(localized: "DNS Servers")) {
                 ForEach($serverDrafts) { $draft in
                     if isEditing == true {
-                        TextField("Address", text: $draft.value)
+                        TextField(String(localized: "Address"), text: $draft.value)
                             .keyboardType(.URL)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
@@ -50,12 +48,12 @@ struct DNSSettingsView: View {
             }
 
             Section {
-                Button("Reset to default") {
+                Button(String(localized: "Reset to default")) {
                     reset()
                 }
             }
         }
-        .navigationTitle("DNS")
+        .navigationTitle(String(localized: "DNS"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -71,7 +69,7 @@ struct DNSSettingsView: View {
             }
         }
     }
-    
+
     private func loadInitial() {
         serverDrafts = appState.dnsServers.map { DNSServerDraft(value: $0) }
     }
@@ -84,7 +82,7 @@ struct DNSSettingsView: View {
         appState.dnsServers = servers
         Task { await tunnel.reconnect() }
     }
-    
+
     private func reset() {
         appState.dnsServers = EVCore.defaultDNSServers
         Task { await tunnel.reconnect() }

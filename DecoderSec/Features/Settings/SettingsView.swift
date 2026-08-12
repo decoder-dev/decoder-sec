@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var tunnel: TunnelManager
+    @State private var hwidCopied = false
 
     var body: some View {
         NavigationView {
@@ -43,6 +45,28 @@ struct SettingsView: View {
                     } label: {
                         Label(String(localized: "Tunnel"), systemImage: "shield")
                     }
+                }
+
+                Section(String(localized: "Device")) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(String(localized: "Device ID (HWID)"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(DeviceIdentity.hwid)
+                            .font(.system(.footnote, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                    Button {
+                        UIPasteboard.general.string = DeviceIdentity.hwid
+                        hwidCopied = true
+                    } label: {
+                        Label(
+                            hwidCopied ? String(localized: "Copied") : String(localized: "Copy device ID"),
+                            systemImage: hwidCopied ? "checkmark" : "doc.on.doc"
+                        )
+                    }
+                } footer: {
+                    Text(String(localized: "Sent with every subscription request. Share this ID with your provider if you see HWID or “App not supported” errors."))
                 }
 
                 Section(String(localized: "Network")) {
