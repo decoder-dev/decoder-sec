@@ -4,6 +4,11 @@ All notable changes to **decoder sec.** are documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.40] — 2026-08-12
+
+### Fixed
+- **iOS compile**: `HappCryptDecryptor.swift` — `swapAdjacent`/`swapBlockHalves` captured `result.count` inside their own `withUnsafeMutableBufferPointer` closure, which is an overlapping (exclusivity-violating) access to `result`. Now the count is captured into a local `let` before the closure runs, so only the buffer pointer is touched inside it.
+
 ## [0.1.0-beta.39] — 2026-08-12
 
 ### Fixed

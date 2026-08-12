@@ -325,9 +325,10 @@ enum HappCryptDecryptor {
 
     private static func swapAdjacent(_ bytes: [UInt8]) -> [UInt8] {
         var result = bytes
+        let count = result.count
         result.withUnsafeMutableBufferPointer { buf in
             if let base = buf.baseAddress {
-                ds_swap_adjacent(base, result.count)
+                ds_swap_adjacent(base, count)
             }
         }
         return result
@@ -336,9 +337,10 @@ enum HappCryptDecryptor {
     /// ABCD → CDAB per 4-byte block (self-inverse).
     private static func swapBlockHalves(_ bytes: [UInt8]) -> [UInt8] {
         var result = bytes
+        let count = result.count
         result.withUnsafeMutableBufferPointer { buf in
             if let base = buf.baseAddress {
-                ds_swap_block_halves(base, result.count)
+                ds_swap_block_halves(base, count)
             }
         }
         return result

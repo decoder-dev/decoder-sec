@@ -463,7 +463,7 @@ final class TunnelManager: ObservableObject {
             if attempt >= 4 {
                 let extensionSilent = !tunnelLogs.contains(where: { !$0.contains("[app]") })
                 if extensionSilent {
-                    lastError = String(localized: "Packet Tunnel did not start (no extension logs). Large config is now passed via VPN profile only — reinstall 0.1.0 (39), or check NE signing in ESign.")
+                    lastError = String(localized: "Packet Tunnel did not start (no extension logs). Large config is now passed via VPN profile only — reinstall 0.1.0 (40), or check NE signing in ESign.")
                     ClientLogBuffer.shared.append("FATAL: extension never logged — likely killed before startTunnel or wrong PacketTunnel bundle id")
                 } else {
                     lastError = String(localized: "Connection failed before the tunnel came up. Open Log console in Settings for details.")
