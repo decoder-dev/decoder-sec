@@ -618,7 +618,7 @@
 			repositoryURL = "https://github.com/NodePassProject/EverywhereCore";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2026.05.18;
+				minimumVersion = 2026.10.24;
 			};
 		};
 		803E3EBB055B6F1C161E71E9 /* XCRemoteSwiftPackageReference "Runestone" */ = {

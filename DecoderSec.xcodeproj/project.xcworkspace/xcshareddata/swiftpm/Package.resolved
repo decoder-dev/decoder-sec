@@ -1,42 +1,42 @@
 {
-  "originHash" : "4eda72003edd15f0b85ddab97bd542e0a23101687fce75d99fcb5feca2d48fa3",
-  "pins" : [
+  "originHash": "4eda72003edd15f0b85ddab97bd542e0a23101687fce75d99fcb5feca2d48fa3",
+  "pins": [
     {
-      "identity" : "everywherecore",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/NodePassProject/EverywhereCore",
-      "state" : {
-        "revision" : "b5236028213ec40e068e463eb05d35b6b3901565",
-        "version" : "2026.7.30"
+      "identity": "everywherecore",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/NodePassProject/EverywhereCore",
+      "state": {
+        "revision": "4ac5704c456119b1f16612e7f907375a4c0dd442",
+        "version": "2026.10.24"
       }
     },
     {
-      "identity" : "runestone",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/simonbs/Runestone",
-      "state" : {
-        "revision" : "592434a103a4d1ab83e14f87ac6eef569dd7a99d",
-        "version" : "0.5.2"
+      "identity": "runestone",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/simonbs/Runestone",
+      "state": {
+        "revision": "592434a103a4d1ab83e14f87ac6eef569dd7a99d",
+        "version": "0.5.2"
       }
     },
     {
-      "identity" : "tree-sitter",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tree-sitter/tree-sitter",
-      "state" : {
-        "revision" : "98be227227af10cc7a269cb3ffb23686c0610b17",
-        "version" : "0.20.9"
+      "identity": "tree-sitter",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/tree-sitter/tree-sitter",
+      "state": {
+        "revision": "98be227227af10cc7a269cb3ffb23686c0610b17",
+        "version": "0.20.9"
       }
     },
     {
-      "identity" : "treesitterlanguages",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/simonbs/TreeSitterLanguages",
-      "state" : {
-        "revision" : "15cf3a9ec3ab95e0d058b7df9f35619123c9e02d",
-        "version" : "0.1.10"
+      "identity": "treesitterlanguages",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/simonbs/TreeSitterLanguages",
+      "state": {
+        "revision": "15cf3a9ec3ab95e0d058b7df9f35619123c9e02d",
+        "version": "0.1.10"
       }
     }
   ],
-  "version" : 3
+  "version": 3
 }

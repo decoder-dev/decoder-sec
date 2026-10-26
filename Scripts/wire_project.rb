@@ -17,9 +17,8 @@ SHARED_FOLDER      = 'Shared'
 
 # Override via env to point a fork of EverywhereCore during CI/local builds.
 EVERYWHERE_CORE_REPO        = ENV.fetch('EVERYWHERE_CORE_REPO', 'https://github.com/NodePassProject/EverywhereCore')
-# Pinned to current EverywhereCore release (Xray v1.260327.0 / v26.3.27,
-# sing-box v1.13.18, mihomo v1.19.29). upToNextMajor still floats within 2026.*.
-EVERYWHERE_CORE_MIN_VERSION = ENV.fetch('EVERYWHERE_CORE_MIN_VERSION', '2026.08.09')
+# The lockfile records the verified release revision; updates remain within 2026.*.
+EVERYWHERE_CORE_MIN_VERSION = ENV.fetch('EVERYWHERE_CORE_MIN_VERSION', '2026.10.24')
 EVERYWHERE_CORE_REQ         = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => EVERYWHERE_CORE_MIN_VERSION }
 EVERYWHERE_CORE_PRODUCT     = 'EverywhereCore'
 
