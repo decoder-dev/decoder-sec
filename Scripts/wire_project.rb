@@ -136,6 +136,8 @@ core_app_dep = add_product_dep(app_target, project, core_pkg, EVERYWHERE_CORE_PR
 core_ne_dep  = add_product_dep(ne_target,  project, core_pkg, EVERYWHERE_CORE_PRODUCT)
 link_product(app_target, project, core_app_dep)
 link_product(ne_target,  project, core_ne_dep)
+# The current binary core references UIDevice from its Go bridge.
+ne_target.add_system_framework('UIKit')
 
 # No manual Embed Frameworks entry: Xcode auto-embeds the framework slice
 # from a SwiftPM binary target into the app bundle when the product is in
